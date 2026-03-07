@@ -1,0 +1,7 @@
+# Paths/patterns that should always fail the dirty-worktree guard when newly introduced
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks

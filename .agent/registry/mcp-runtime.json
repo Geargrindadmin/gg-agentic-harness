@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "updated": "2026-03-07",
+  "profiles": {
+    "codex": {
+      "description": "Primary Codex runtime profile for GGV3 development.",
+      "mcpServers": [
+        "CodeLogic",
+        "MongoDB",
+        "Ref",
+        "apify",
+        "browser-use",
+        "browserbase",
+        "chrome-devtools",
+        "codacy",
+        "context7",
+        "docker",
+        "everything",
+        "exa",
+        "filesystem",
+        "gg-skills",
+        "github",
+        "google-maps-platform-code-assist",
+        "ide",
+        "memory",
+        "n8n-mcp",
+        "sentry",
+        "sequentialthinking",
+        "stripe",
+        "time"
+      ],
+      "disabled": [
+        "byterover",
+        "byterover-mcp",
+        "playwright",
+        "gg-agent-bridge",
+        "clickhouse",
+        "postgresql"
+      ]
+    },
+    "claude": {
+      "description": "Claude Code runtime profile. Optional plugins (for example claude-mem) may extend this set.",
+      "mcpServers": [
+        "CodeLogic",
+        "MongoDB",
+        "Ref",
+        "apify",
+        "browser-use",
+        "browserbase",
+        "chrome-devtools",
+        "codacy",
+        "context7",
+        "docker",
+        "everything",
+        "exa",
+        "filesystem",
+        "gg-skills",
+        "github",
+        "google-maps-platform-code-assist",
+        "ide",
+        "memory",
+        "n8n-mcp",
+        "sentry",
+        "sequentialthinking",
+        "stripe",
+        "time"
+      ],
+      "optional": [
+        "claude-mem"
+      ]
+    },
+    "kimi": {
+      "description": "Kimi model-provider runtime profile using the same MCP/tooling contract as codex.",
+      "mcpServers": [
+        "CodeLogic",
+        "MongoDB",
+        "Ref",
+        "apify",
+        "browser-use",
+        "browserbase",
+        "chrome-devtools",
+        "codacy",
+        "context7",
+        "docker",
+        "everything",
+        "exa",
+        "filesystem",
+        "gg-skills",
+        "github",
+        "google-maps-platform-code-assist",
+        "ide",
+        "memory",
+        "n8n-mcp",
+        "sentry",
+        "sequentialthinking",
+        "stripe",
+        "time"
+      ],
+      "disabled": [
+        "gg-agent-bridge",
+        "gg-a2a-server",
+        "byterover",
+        "byterover-mcp",
+        "playwright",
+        "clickhouse",
+        "postgresql"
+      ]
+    }
+  }
+}

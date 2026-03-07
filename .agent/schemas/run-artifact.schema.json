@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://geargrind.local/schemas/run-artifact.schema.json",
+  "title": "Agent Run Artifact",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "createdAt",
+    "updatedAt",
+    "status",
+    "runtimeProfile",
+    "classification",
+    "selectedSkills",
+    "mcpCalls",
+    "gates"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["in_progress", "success", "failed"] },
+    "runtimeProfile": { "type": "string", "enum": ["codex", "claude", "kimi"] },
+    "classification": {
+      "type": "string",
+      "enum": ["SIMPLE", "TASK", "TASK_LITE", "DECISION", "CRITICAL"]
+    },
+    "taskSummary": { "type": "string" },
+    "selectedSkills": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "mcpCalls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["server", "tool", "status", "timestamp"],
+        "properties": {
+          "server": { "type": "string" },
+          "tool": { "type": "string" },
+          "status": { "type": "string", "enum": ["pass", "fail", "skipped"] },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "detail": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "command", "exitCode", "attempt", "timestamp"],
+        "properties": {
+          "name": { "type": "string" },
+          "command": { "type": "string" },
+          "exitCode": { "type": "integer" },
+          "attempt": { "type": "integer", "minimum": 1 },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "retries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate", "attempts"],
+        "properties": {
+          "gate": { "type": "string" },
+          "attempts": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rollback": {
+      "type": ["object", "null"],
+      "properties": {
+        "trigger": { "type": "string" },
+        "executed": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

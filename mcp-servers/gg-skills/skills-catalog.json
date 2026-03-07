@@ -1,0 +1,863 @@
+{
+  "generated": "2026-03-07T16:22:54.996Z",
+  "skillCount": 117,
+  "workflowCount": 38,
+  "skills": [
+    {
+      "slug": "ads",
+      "name": "ads",
+      "category": "Advertising",
+      "description": "Comprehensive paid advertising audit and optimization for any business type. Performs full multi-platform audits (Google"
+    },
+    {
+      "slug": "ads-audit",
+      "name": "ads-audit",
+      "category": "Advertising",
+      "description": "Full multi-platform paid advertising audit with parallel subagent delegation. Analyzes Google Ads, Meta Ads, LinkedIn Ad"
+    },
+    {
+      "slug": "ads-budget",
+      "name": "ads-budget",
+      "category": "Advertising",
+      "description": "Budget allocation and bidding strategy review across all ad platforms. Evaluates spend distribution, bidding strategy ap"
+    },
+    {
+      "slug": "ads-competitor",
+      "name": "ads-competitor",
+      "category": "Advertising",
+      "description": "Competitor ad intelligence analysis across Google, Meta, LinkedIn, TikTok, and Microsoft. Analyzes competitor ad copy, c"
+    },
+    {
+      "slug": "ads-creative",
+      "name": "ads-creative",
+      "category": "Advertising",
+      "description": "Cross-platform creative quality audit covering ad copy, video, image, and format diversity across all platforms. Detects"
+    },
+    {
+      "slug": "ads-google",
+      "name": "ads-google",
+      "category": "Advertising",
+      "description": "Google Ads deep analysis covering Search, Performance Max, Display, YouTube, and Demand Gen campaigns. Evaluates 74 chec"
+    },
+    {
+      "slug": "ads-landing",
+      "name": "ads-landing",
+      "category": "Advertising",
+      "description": "Landing page quality assessment for paid advertising campaigns. Evaluates message match, page speed, mobile experience, "
+    },
+    {
+      "slug": "ads-linkedin",
+      "name": "ads-linkedin",
+      "category": "Advertising",
+      "description": "LinkedIn Ads deep analysis for B2B advertising. Evaluates 25 checks across technical setup, audience targeting, creative"
+    },
+    {
+      "slug": "ads-meta",
+      "name": "ads-meta",
+      "category": "Advertising",
+      "description": "Meta Ads deep analysis covering Facebook and Instagram advertising. Evaluates 46 checks across Pixel/CAPI health, creati"
+    },
+    {
+      "slug": "ads-microsoft",
+      "name": "ads-microsoft",
+      "category": "Advertising",
+      "description": "Microsoft/Bing Ads deep analysis covering search, Performance Max, Audience Network, and Copilot integration. Evaluates "
+    },
+    {
+      "slug": "ads-plan",
+      "name": "ads-plan",
+      "category": "Advertising",
+      "description": "Strategic paid advertising planning with industry-specific templates. Covers platform selection, campaign architecture, "
+    },
+    {
+      "slug": "ads-tiktok",
+      "name": "ads-tiktok",
+      "category": "Advertising",
+      "description": "TikTok Ads deep analysis covering creative quality, tracking, bidding, campaign structure, and TikTok Shop. Evaluates 25"
+    },
+    {
+      "slug": "ads-youtube",
+      "name": "ads-youtube",
+      "category": "Advertising",
+      "description": "YouTube Ads specific analysis covering campaign types, creative quality, audience targeting, and measurement. Evaluates "
+    },
+    {
+      "slug": "agent-factory",
+      "name": "agent-factory",
+      "category": "Core",
+      "description": "Creates specialized worker agents dynamically from templates. Use when orchestrator needs to spawn task-specific workers"
+    },
+    {
+      "slug": "ai-engineering-patterns",
+      "name": "ai-engineering-patterns",
+      "category": "Core",
+      "description": "AI engineering patterns relevant to GGV3 - agentic RAG, financial analysis, MCP infrastructure, context engineering, and"
+    },
+    {
+      "slug": "algorithmic-art",
+      "name": "algorithmic-art",
+      "category": "Core",
+      "description": "Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users r"
+    },
+    {
+      "slug": "api-patterns",
+      "name": "api-patterns",
+      "category": "Backend",
+      "description": "API design principles and decision-making. REST vs GraphQL vs tRPC selection, response formats, versioning, pagination."
+    },
+    {
+      "slug": "app-builder",
+      "name": "app-builder",
+      "category": "Core",
+      "description": "Main application building orchestrator. Creates full-stack applications from natural language requests. Determines proje"
+    },
+    {
+      "slug": "architecture",
+      "name": "architecture",
+      "category": "Core",
+      "description": "Architectural decision-making framework. Requirements analysis, trade-off evaluation, ADR documentation. Use when making"
+    },
+    {
+      "slug": "architecture-lead",
+      "name": "architecture-lead",
+      "category": "Core",
+      "description": "Architecture consultation for Conductor orchestrator. Makes decisions about system design, patterns, component boundarie"
+    },
+    {
+      "slug": "bash-linux",
+      "name": "bash-linux",
+      "category": "Core",
+      "description": "Bash/Linux terminal patterns. Critical commands, piping, error handling, scripting. Use when working on macOS or Linux s"
+    },
+    {
+      "slug": "behavioral-modes",
+      "name": "behavioral-modes",
+      "category": "Core",
+      "description": "AI operational modes (brainstorm, implement, debug, review, teach, ship, orchestrate). Use to adapt behavior based on ta"
+    },
+    {
+      "slug": "bmad-os-audit-file-refs",
+      "name": "bmad-os-audit-file-refs",
+      "category": "OSS Tooling",
+      "description": "Audit BMAD source files for file-reference convention violations using parallel Haiku subagents. Use when users requests"
+    },
+    {
+      "slug": "bmad-os-changelog-social",
+      "name": "bmad-os-changelog-social",
+      "category": "OSS Tooling",
+      "description": "Generate social media announcements for Discord, Twitter, and LinkedIn from the latest changelog entry. Use when user as"
+    },
+    {
+      "slug": "bmad-os-diataxis-style-fix",
+      "name": "bmad-os-diataxis-style-fix",
+      "category": "OSS Tooling",
+      "description": "Fixes documentation to comply with Diataxis framework and BMad Method style guide rules. Use when user asks to check or "
+    },
+    {
+      "slug": "bmad-os-draft-changelog",
+      "name": "bmad-os-draft-changelog",
+      "category": "OSS Tooling",
+      "description": "Analyzes changes since last release and updates CHANGELOG.md ONLY. Use when users requests 'update the changelog' or 'pr"
+    },
+    {
+      "slug": "bmad-os-gh-triage",
+      "name": "bmad-os-gh-triage",
+      "category": "OSS Tooling",
+      "description": "Analyze all github issues. Use when the user says 'triage the github issues' or 'analyze open github issues'."
+    },
+    {
+      "slug": "bmad-os-release-module",
+      "name": "bmad-os-release-module",
+      "category": "OSS Tooling",
+      "description": "Perform requested version bump, git tag, npm publish, GitHub release. Use when user requests 'perform a release' only."
+    },
+    {
+      "slug": "bmad-os-review-pr",
+      "name": "bmad-os-review-pr",
+      "category": "OSS Tooling",
+      "description": "Adversarial PR review tool (Raven's Verdict). Cynical deep review transformed into professional engineering findings. Us"
+    },
+    {
+      "slug": "bmad-os-root-cause-analysis",
+      "name": "bmad-os-root-cause-analysis",
+      "category": "OSS Tooling",
+      "description": "Analyzes a bug-fix commit or PR and produces a structured Root Cause Analysis report covering what went wrong, why, and "
+    },
+    {
+      "slug": "board-of-directors",
+      "name": "board-of-directors",
+      "category": "Core",
+      "description": "Simulate a 5-member expert board deliberation for major decisions. Use when evaluating plans, architecture choices, feat"
+    },
+    {
+      "slug": "brainstorming",
+      "name": "brainstorming",
+      "category": "Core",
+      "description": "Socratic questioning protocol + user communication. MANDATORY for complex requests, new features, or unclear requirement"
+    },
+    {
+      "slug": "brand-guidelines",
+      "name": "brand-guidelines",
+      "category": "Core",
+      "description": "Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic'"
+    },
+    {
+      "slug": "business-docs-sync",
+      "name": "business-docs-sync",
+      "category": "Core",
+      "description": "Keep business strategy and product documents synchronized after pricing, model, roadmap, or product decision changes."
+    },
+    {
+      "slug": "canvas-design",
+      "name": "canvas-design",
+      "category": "Core",
+      "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user "
+    },
+    {
+      "slug": "claude-api",
+      "name": "claude-api",
+      "category": "Core",
+      "description": "Build apps with the Claude API or Anthropic SDK. TRIGGER when: code imports `anthropic`/`@anthropic-ai/sdk`/`claude_agen"
+    },
+    {
+      "slug": "clean-code",
+      "name": "clean-code",
+      "category": "Core",
+      "description": "Pragmatic coding standards - concise, direct, no over-engineering, no unnecessary comments"
+    },
+    {
+      "slug": "code-review-checklist",
+      "name": "code-review-checklist",
+      "category": "Core",
+      "description": "Code review guidelines covering code quality, security, and best practices."
+    },
+    {
+      "slug": "conductor-orchestrator",
+      "name": "conductor-orchestrator",
+      "category": "Core",
+      "description": "Master coordinator for the Evaluate-Loop workflow v3. Supports GOAL-DRIVEN entry, PARALLEL execution via worker agents, "
+    },
+    {
+      "slug": "context-driven-development",
+      "name": "context-driven-development",
+      "category": "Core",
+      "description": "Use this skill when working with Conductor's context-driven development methodology, managing project context artifacts,"
+    },
+    {
+      "slug": "context-loader",
+      "name": "context-loader",
+      "category": "Core",
+      "description": "Load project context efficiently for Conductor workflows. Use when starting work on a track, implementing features, or n"
+    },
+    {
+      "slug": "cto-advisor",
+      "name": "cto-advisor",
+      "category": "Core",
+      "description": "Technical leadership guidance for engineering teams, architecture decisions, and technology strategy. Includes tech debt"
+    },
+    {
+      "slug": "cto-plan-reviewer",
+      "name": "cto-plan-reviewer",
+      "category": "Core",
+      "description": "Technical architecture review agent for execution plans. Uses cto-advisor skill to evaluate technical decisions, archite"
+    },
+    {
+      "slug": "database-design",
+      "name": "database-design",
+      "category": "Backend",
+      "description": "Database design principles and decision-making. Schema design, indexing strategy, ORM selection, serverless databases."
+    },
+    {
+      "slug": "deployment-procedures",
+      "name": "deployment-procedures",
+      "category": "DevOps",
+      "description": "Production deployment principles and decision-making. Safe deployment workflows, rollback strategies, and verification. "
+    },
+    {
+      "slug": "dispatching-parallel-agents",
+      "name": "dispatching-parallel-agents",
+      "category": "Core",
+      "description": "Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies"
+    },
+    {
+      "slug": "doc-coauthoring",
+      "name": "doc-coauthoring",
+      "category": "Core",
+      "description": "Guide users through a structured workflow for co-authoring documentation. Use when user wants to write documentation, pr"
+    },
+    {
+      "slug": "documentation-templates",
+      "name": "documentation-templates",
+      "category": "Core",
+      "description": "Documentation templates and structure guidelines. README, API docs, code comments, and AI-friendly documentation."
+    },
+    {
+      "slug": "docx",
+      "name": "docx",
+      "category": "Documents",
+      "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers inclu"
+    },
+    {
+      "slug": "eval-business-logic",
+      "name": "eval-business-logic",
+      "category": "Evaluation",
+      "description": "Specialized business logic evaluator for the Evaluate-Loop. Use this for evaluating tracks that implement core product l"
+    },
+    {
+      "slug": "eval-code-quality",
+      "name": "eval-code-quality",
+      "category": "Evaluation",
+      "description": "Specialized code quality evaluator for the Evaluate-Loop. Use this for evaluating code implementation tracks where the d"
+    },
+    {
+      "slug": "eval-integration",
+      "name": "eval-integration",
+      "category": "Evaluation",
+      "description": "Specialized integration evaluator for the Evaluate-Loop. Use this for evaluating tracks that integrate external services"
+    },
+    {
+      "slug": "eval-ui-ux",
+      "name": "eval-ui-ux",
+      "category": "Evaluation",
+      "description": "Specialized UI/UX evaluator for the Evaluate-Loop. Use this for evaluating UI shell tracks, design system tracks, screen"
+    },
+    {
+      "slug": "executing-plans",
+      "name": "executing-plans",
+      "category": "Core",
+      "description": "Use when you have a written implementation plan to execute in a separate session with review checkpoints"
+    },
+    {
+      "slug": "finishing-a-development-branch",
+      "name": "finishing-a-development-branch",
+      "category": "Core",
+      "description": "Use when implementation is complete, all tests pass, and you need to decide how to integrate the work - guides completio"
+    },
+    {
+      "slug": "frontend-checklist",
+      "name": "frontend-checklist",
+      "category": "Frontend",
+      "description": "The perfect Front-End Checklist for modern websites and meticulous developers. Covers HTML, CSS, JavaScript, performance"
+    },
+    {
+      "slug": "frontend-design",
+      "name": "frontend-design",
+      "category": "Frontend",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to "
+    },
+    {
+      "slug": "game-development",
+      "name": "game-development",
+      "category": "Core",
+      "description": "Game development orchestrator. Routes to platform-specific skills based on project needs."
+    },
+    {
+      "slug": "geo-fundamentals",
+      "name": "geo-fundamentals",
+      "category": "Core",
+      "description": "Generative Engine Optimization for AI search engines (ChatGPT, Claude, Perplexity)."
+    },
+    {
+      "slug": "go",
+      "name": "go",
+      "category": "Core",
+      "description": "The single entry point to the Conductor system - state your goal and everything is handled automatically"
+    },
+    {
+      "slug": "i18n-localization",
+      "name": "i18n-localization",
+      "category": "Core",
+      "description": "Internationalization and localization patterns. Detecting hardcoded strings, managing translations, locale files, RTL su"
+    },
+    {
+      "slug": "intelligent-routing",
+      "name": "intelligent-routing",
+      "category": "Core",
+      "description": "Automatic agent selection and intelligent task routing. Analyzes user requests and automatically selects the best specia"
+    },
+    {
+      "slug": "internal-comms",
+      "name": "internal-comms",
+      "category": "Core",
+      "description": "A set of resources to help me write all kinds of internal communications, using the formats that my company likes to use"
+    },
+    {
+      "slug": "knowledge-manager",
+      "name": "knowledge-manager",
+      "category": "Core",
+      "description": "Loads relevant patterns and known errors before track planning. Searches conductor/knowledge/ for solutions we've used b"
+    },
+    {
+      "slug": "lint-and-validate",
+      "name": "lint-and-validate",
+      "category": "Core",
+      "description": "Automatic quality control, linting, and static analysis procedures. Use after every code modification to ensure syntax c"
+    },
+    {
+      "slug": "loop-execution-evaluator",
+      "name": "loop-execution-evaluator",
+      "category": "Evaluate-Loop",
+      "description": "Evaluate-Loop Step 4: EVALUATE EXECUTION. This is the dispatcher agent — it determines the track type and invokes the co"
+    },
+    {
+      "slug": "loop-executor",
+      "name": "loop-executor",
+      "category": "Evaluate-Loop",
+      "description": "Evaluate-Loop Step 3: EXECUTE. Use this agent to implement tasks from a verified plan. Works through plan.md tasks seque"
+    },
+    {
+      "slug": "loop-fixer",
+      "name": "loop-fixer",
+      "category": "Evaluate-Loop",
+      "description": "Evaluate-Loop Step 5: FIX. Use this agent when an evaluation (plan or execution) returns FAIL. Takes the evaluator's fix"
+    },
+    {
+      "slug": "loop-plan-evaluator",
+      "name": "loop-plan-evaluator",
+      "category": "Evaluate-Loop",
+      "description": "Evaluate-Loop Step 2: EVALUATE PLAN. Use this agent to verify an execution plan before any code is written. Checks scope"
+    },
+    {
+      "slug": "loop-planner",
+      "name": "loop-planner",
+      "category": "Evaluate-Loop",
+      "description": "Evaluate-Loop Step 1: PLAN. Use this agent when starting a new track or feature to create a detailed execution plan. Rea"
+    },
+    {
+      "slug": "mcp-builder",
+      "name": "mcp-builder",
+      "category": "Core",
+      "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services"
+    },
+    {
+      "slug": "message-bus",
+      "name": "message-bus",
+      "category": "Core",
+      "description": "File-based message queue for inter-agent coordination. Used by workers AND board directors to communicate. Provides: pro"
+    },
+    {
+      "slug": "mobile-design",
+      "name": "mobile-design",
+      "category": "Mobile",
+      "description": "Mobile-first design thinking and decision-making for iOS and Android apps. Touch interaction, performance patterns, plat"
+    },
+    {
+      "slug": "nextjs-react-expert",
+      "name": "react-best-practices",
+      "category": "Core",
+      "description": "React and Next.js performance optimization from Vercel Engineering. Use when building React components, optimizing perfo"
+    },
+    {
+      "slug": "nodejs-best-practices",
+      "name": "nodejs-best-practices",
+      "category": "Backend",
+      "description": "Node.js development principles and decision-making. Framework selection, async patterns, security, and architecture. Tea"
+    },
+    {
+      "slug": "parallel-agents",
+      "name": "parallel-agents",
+      "category": "Core",
+      "description": "Multi-agent orchestration patterns. Use when multiple independent tasks can run with different domain expertise or when "
+    },
+    {
+      "slug": "parallel-dispatch",
+      "name": "parallel-dispatch",
+      "category": "Core",
+      "description": "Parallel execution engine for dispatching worker agents. Used by conductor-orchestrator to spawn multiple workers simult"
+    },
+    {
+      "slug": "pdf",
+      "name": "pdf",
+      "category": "Documents",
+      "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables fr"
+    },
+    {
+      "slug": "performance-profiling",
+      "name": "performance-profiling",
+      "category": "Core",
+      "description": "Performance profiling principles. Measurement, analysis, and optimization techniques."
+    },
+    {
+      "slug": "plan-critiquer",
+      "name": "plan-critiquer",
+      "category": "Core",
+      "description": "Harshly critique strategic documents (validation reports, competitive analyses, business plans) to identify blind spots,"
+    },
+    {
+      "slug": "plan-writing",
+      "name": "plan-writing",
+      "category": "Core",
+      "description": "Structured task planning with clear breakdowns, dependencies, and verification criteria. Use when implementing features,"
+    },
+    {
+      "slug": "powershell-windows",
+      "name": "powershell-windows",
+      "category": "Core",
+      "description": "PowerShell Windows patterns. Critical pitfalls, operator syntax, error handling."
+    },
+    {
+      "slug": "pptx",
+      "name": "pptx",
+      "category": "Documents",
+      "description": "Use this skill any time a .pptx file is involved in any way — as input, output, or both. This includes: creating slide d"
+    },
+    {
+      "slug": "product-lead",
+      "name": "product-lead",
+      "category": "Core",
+      "description": "Product consultation for Conductor orchestrator. Clarifies scope, interprets ambiguous requirements, prioritizes feature"
+    },
+    {
+      "slug": "python-patterns",
+      "name": "python-patterns",
+      "category": "Core",
+      "description": "Python development principles and decision-making. Framework selection, async patterns, type hints, project structure. T"
+    },
+    {
+      "slug": "qa-lead",
+      "name": "qa-lead",
+      "category": "Core",
+      "description": "Quality assurance consultation for Conductor orchestrator. Sets test coverage requirements, validates quality gates, det"
+    },
+    {
+      "slug": "receiving-code-review",
+      "name": "receiving-code-review",
+      "category": "Core",
+      "description": "Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or techni"
+    },
+    {
+      "slug": "red-team-tactics",
+      "name": "red-team-tactics",
+      "category": "Security",
+      "description": "Red team tactics principles based on MITRE ATT&CK. Attack phases, detection evasion, reporting."
+    },
+    {
+      "slug": "requesting-code-review",
+      "name": "requesting-code-review",
+      "category": "Core",
+      "description": "Use when completing tasks, implementing major features, or before merging to verify work meets requirements"
+    },
+    {
+      "slug": "retrospective-agent",
+      "name": "retrospective-agent",
+      "category": "Core",
+      "description": "Runs after every track completion to extract learnings. Analyzes what worked, what failed, and what patterns emerged. Up"
+    },
+    {
+      "slug": "rust-pro",
+      "name": "rust-pro",
+      "category": "Core",
+      "description": "Master Rust 1.75+ with modern async patterns, advanced type system features, and production-ready systems programming. E"
+    },
+    {
+      "slug": "seo-fundamentals",
+      "name": "seo-fundamentals",
+      "category": "Core",
+      "description": "SEO fundamentals, E-E-A-T, Core Web Vitals, and Google algorithm principles."
+    },
+    {
+      "slug": "server-management",
+      "name": "server-management",
+      "category": "DevOps",
+      "description": "Server management principles and decision-making. Process management, monitoring strategy, and scaling decisions. Teache"
+    },
+    {
+      "slug": "skill-creator",
+      "name": "skill-creator",
+      "category": "Core",
+      "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a sk"
+    },
+    {
+      "slug": "slack-gif-creator",
+      "name": "slack-gif-creator",
+      "category": "Core",
+      "description": "Knowledge and utilities for creating animated GIFs optimized for Slack. Provides constraints, validation tools, and anim"
+    },
+    {
+      "slug": "subagent-driven-development",
+      "name": "subagent-driven-development",
+      "category": "Core",
+      "description": "Use when executing implementation plans with independent tasks in the current session"
+    },
+    {
+      "slug": "swarm-orchestration",
+      "name": "swarm-orchestration",
+      "category": "Core",
+      "description": "Multi-agent swarm orchestration patterns from kyegomez/swarms. Sequential, Concurrent, MoA, GroupChat, Hierarchical, and"
+    },
+    {
+      "slug": "swarm-task-builder",
+      "name": "swarm-task-builder",
+      "category": "Core",
+      "description": "Constructs properly structured Kimi swarm agent task prompts. Use whenever spawning a swarm via spawn_kimi_agent or spaw"
+    },
+    {
+      "slug": "systematic-debugging",
+      "name": "systematic-debugging",
+      "category": "Core",
+      "description": "4-phase systematic debugging methodology with root cause analysis and evidence-based verification. Use when debugging co"
+    },
+    {
+      "slug": "tailwind-patterns",
+      "name": "tailwind-patterns",
+      "category": "Frontend",
+      "description": "Tailwind CSS v4 principles. CSS-first configuration, container queries, modern patterns, design token architecture."
+    },
+    {
+      "slug": "tdd-workflow",
+      "name": "tdd-workflow",
+      "category": "Testing",
+      "description": "Test-Driven Development workflow principles. RED-GREEN-REFACTOR cycle."
+    },
+    {
+      "slug": "tech-lead",
+      "name": "tech-lead",
+      "category": "Core",
+      "description": "Technical implementation consultation for Conductor orchestrator. Advises on implementation approach, dependency choices"
+    },
+    {
+      "slug": "test-driven-development",
+      "name": "test-driven-development",
+      "category": "Testing",
+      "description": "Use when implementing any feature or bugfix, before writing implementation code"
+    },
+    {
+      "slug": "testing-patterns",
+      "name": "testing-patterns",
+      "category": "Testing",
+      "description": "Testing patterns and principles. Unit, integration, mocking strategies."
+    },
+    {
+      "slug": "theme-factory",
+      "name": "theme-factory",
+      "category": "Core",
+      "description": "Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. Th"
+    },
+    {
+      "slug": "track-manager",
+      "name": "track-manager",
+      "category": "Core",
+      "description": "Manage Conductor tracks, phases, and tasks. Use when working with track status, updating task markers, or navigating bet"
+    },
+    {
+      "slug": "ui-ux-pro-max",
+      "name": "ui-ux-pro-max",
+      "category": "Core",
+      "description": "UI/UX design intelligence. 50 styles, 21 palettes, 50 font pairings, 20 charts, 9 stacks."
+    },
+    {
+      "slug": "using-git-worktrees",
+      "name": "using-git-worktrees",
+      "category": "Core",
+      "description": "Use when starting feature work that needs isolation from current workspace or before executing implementation plans - cr"
+    },
+    {
+      "slug": "using-superpowers",
+      "name": "using-superpowers",
+      "category": "Core",
+      "description": "Use when starting any conversation - establishes how to find and use skills, requiring Skill tool invocation before ANY "
+    },
+    {
+      "slug": "verification-before-completion",
+      "name": "verification-before-completion",
+      "category": "Core",
+      "description": "Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verifi"
+    },
+    {
+      "slug": "vulnerability-scanner",
+      "name": "vulnerability-scanner",
+      "category": "Security",
+      "description": "Advanced vulnerability analysis principles. OWASP 2025, Supply Chain Security, attack surface mapping, risk prioritizati"
+    },
+    {
+      "slug": "web-artifacts-builder",
+      "name": "web-artifacts-builder",
+      "category": "Frontend",
+      "description": "Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies ("
+    },
+    {
+      "slug": "web-design-guidelines",
+      "name": "web-design-guidelines",
+      "category": "Frontend",
+      "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit "
+    },
+    {
+      "slug": "webapp-testing",
+      "name": "webapp-testing",
+      "category": "Testing",
+      "description": "Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functional"
+    },
+    {
+      "slug": "writing-plans",
+      "name": "writing-plans",
+      "category": "Core",
+      "description": "Use when you have a spec or requirements for a multi-step task, before touching code"
+    },
+    {
+      "slug": "writing-skills",
+      "name": "writing-skills",
+      "category": "Core",
+      "description": "Use when creating new skills, editing existing skills, or verifying skills work before deployment"
+    },
+    {
+      "slug": "xlsx",
+      "name": "xlsx",
+      "category": "Documents",
+      "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: "
+    }
+  ],
+  "workflows": [
+    {
+      "slug": "agentic-status",
+      "description": "Live status dashboard for all 8 GGV3 agentic layer nodes. Shows active beads, sandbox state, blueprint phase, last valid"
+    },
+    {
+      "slug": "board-meeting",
+      "description": "Full board deliberation with discussion rounds - directors debate and reach consensus"
+    },
+    {
+      "slug": "board-review",
+      "description": "Quick board review - get expert opinions from 5 directors without full deliberation"
+    },
+    {
+      "slug": "brainstorm",
+      "description": "Structured brainstorming for projects and features. Explores multiple options before implementation."
+    },
+    {
+      "slug": "ceo",
+      "description": "Get strategic business advice from an expert CEO advisor with 30 years of entrepreneurship experience"
+    },
+    {
+      "slug": "claude-mem-setup",
+      "description": "Install, verify, and configure the claude-mem agentic memory plugin for GGV3"
+    },
+    {
+      "slug": "cmo",
+      "description": "Get marketing strategy and brand positioning advice from an expert CMO advisor with 30 years of marketing leadership exp"
+    },
+    {
+      "slug": "create",
+      "description": "Create new application command. Triggers App Builder skill and starts interactive dialogue with user."
+    },
+    {
+      "slug": "cto",
+      "description": "Get technical architecture and engineering advice from an expert CTO advisor with 30 years of technology leadership expe"
+    },
+    {
+      "slug": "cto-advisor",
+      "description": "Run CTO-level technical review of the current execution plan - architecture, tech debt, engineering excellence"
+    },
+    {
+      "slug": "debug",
+      "description": "Debugging command. Activates DEBUG mode for systematic problem investigation."
+    },
+    {
+      "slug": "deploy",
+      "description": "Deployment command for production releases. Pre-flight checks and deployment execution."
+    },
+    {
+      "slug": "enhance",
+      "description": "Add or update features in existing application. Used for iterative development."
+    },
+    {
+      "slug": "execute-plan",
+      "description": "Execute plan in batches with review checkpoints"
+    },
+    {
+      "slug": "generate-project-context",
+      "description": "Generate or refresh docs/project-context.md from the current repository and enforce BMAD-style project-context disciplin"
+    },
+    {
+      "slug": "go",
+      "description": "The single entry point to the Conductor system - state your goal and everything is handled automatically"
+    },
+    {
+      "slug": "loop-execution-evaluator",
+      "description": "Verify implementation quality. Evaluate-Loop Step 4."
+    },
+    {
+      "slug": "loop-executor",
+      "description": "Implement tasks from the plan. Evaluate-Loop Step 3."
+    },
+    {
+      "slug": "loop-fixer",
+      "description": "Fix issues found by evaluation. Evaluate-Loop Step 5."
+    },
+    {
+      "slug": "loop-plan-evaluator",
+      "description": "Validate execution plan against spec. Evaluate-Loop Step 2."
+    },
+    {
+      "slug": "loop-planner",
+      "description": "Create execution plan from specification. Evaluate-Loop Step 1."
+    },
+    {
+      "slug": "minion",
+      "description": "Autonomous out-loop coding agent. Traverses all 8 agentic layer nodes from prompt to validated PR, with explicit escalat"
+    },
+    {
+      "slug": "orchestrate",
+      "description": "Coordinate multiple agents for complex tasks. Use for multi-perspective analysis, comprehensive reviews, or tasks requir"
+    },
+    {
+      "slug": "paperclip-extracted",
+      "description": "Extracted workflow patterns (not platform adoption): intake triage, capability routing, and gated execution"
+    },
+    {
+      "slug": "parallel-dispatcher",
+      "description": "Dispatch multiple task-workers in parallel based on DAG dependencies."
+    },
+    {
+      "slug": "phase-review",
+      "description": "Run post-execution quality gate - verifies all deliverables before marking a track complete"
+    },
+    {
+      "slug": "plan",
+      "description": "Create project plan using project-planner agent. No code writing - only plan file generation."
+    },
+    {
+      "slug": "preview",
+      "description": "Preview server start, stop, and status check. Local development server management."
+    },
+    {
+      "slug": "status",
+      "description": "Display agent and project status. Progress tracking and status board."
+    },
+    {
+      "slug": "symphony-lite",
+      "description": "Single isolated autonomous run flow inspired by Symphony: one task, one worktree, one validation gate"
+    },
+    {
+      "slug": "task-worker",
+      "description": "Execute a single task from the plan. Used for parallel execution."
+    },
+    {
+      "slug": "test",
+      "description": "Test generation and test running command. Creates and executes tests for code."
+    },
+    {
+      "slug": "test-quality-gate",
+      "description": "Run the Testing Quality Gate — 11 specialized sub-agents verify test quality at the end of each 5-Cycle Engine phase. Ha"
+    },
+    {
+      "slug": "ui-audit",
+      "description": "Run comprehensive UI/UX design validation against design principles, accessibility standards, and usability laws"
+    },
+    {
+      "slug": "ui-ux-pro-max",
+      "description": "Plan and implement UI"
+    },
+    {
+      "slug": "ux-designer",
+      "description": "Get UX strategy and design guidance from an expert UX Designer with 30 years of user experience and product design exper"
+    },
+    {
+      "slug": "visual-explainer",
+      "description": "Generate rich visual explainers (HTML/slide-style) for architecture, diffs, plans, audits, and handoffs"
+    },
+    {
+      "slug": "write-plan",
+      "description": "Create detailed implementation plan with bite-sized tasks"
+    }
+  ]
+}

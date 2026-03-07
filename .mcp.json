@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gg-skills": {
+      "command": "node",
+      "args": ["mcp-servers/gg-skills/dist/index.js"],
+      "env": {
+        "SKILLS_DIR": ".agent/skills",
+        "WORKFLOWS_DIR": ".agent/workflows"
+      }
+    }
+  }
+}

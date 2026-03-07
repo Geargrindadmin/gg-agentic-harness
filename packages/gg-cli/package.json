@@ -1,0 +1,16 @@
+{
+  "name": "@geargrind/gg-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "gg": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "node -e \"console.log('gg-cli: no tests yet')\""
+  }
+}

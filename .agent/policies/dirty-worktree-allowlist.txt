@@ -1,0 +1,13 @@
+# Paths allowed to change without blocking dirty-worktree checks (generated/runtime noise)
+.agent/logs/*
+.agent/state/*
+.beads/*
+conductor/tracks/*
+docs/.obsidian/*
+docs/.systemsculpt/diagnostics/*
+docs/.systemsculpt/settings-backups/*
+server/tests/chaos/reports/*
+walkthrough.md
+server/walkthrough.md
+*.pid
+*.port

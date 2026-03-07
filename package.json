@@ -1,0 +1,27 @@
+{
+  "name": "gg-agentic-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "mcp-servers/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@geargrind/gg-core --workspace=@geargrind/gg-cli --workspace=gg-skills-mcp-server",
+    "gg:build": "npm run build --workspace=@geargrind/gg-core --workspace=@geargrind/gg-cli",
+    "gg": "node packages/gg-cli/dist/index.js",
+    "gg:doctor": "node packages/gg-cli/dist/index.js doctor",
+    "harness:lint": "node scripts/harness-lint.mjs",
+    "harness:skills-audit": "node scripts/skills-audit.mjs",
+    "harness:project-context": "node scripts/generate-project-context.mjs",
+    "harness:project-context:check": "node scripts/generate-project-context.mjs --check",
+    "obsidian:doctor": "node scripts/obsidian-cli-doctor.mjs",
+    "obsidian:vault:init": "node scripts/obsidian-vault-bootstrap.mjs",
+    "obsidian:model-log": "node scripts/obsidian-model-log.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "typescript": "^5.9.2"
+  }
+}
