@@ -19,6 +19,17 @@ npm install
 npm run build
 ```
 
+## Remote install into a project (one command)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Geargrindadmin/gg-agentic-harness/main/scripts/install-from-github.sh) /absolute/path/to/target-repo symlink
+```
+
+Arguments:
+
+- arg1: target repository path (defaults to current directory)
+- arg2: mode `symlink|copy` (defaults to `symlink`)
+
 ## Validate
 
 ```bash
@@ -29,6 +40,12 @@ npm run gg -- --json doctor
 
 ```bash
 npm run gg -- portable init /absolute/path/to/target-repo --mode symlink
+```
+
+Or local installer script:
+
+```bash
+./scripts/install-from-github.sh /absolute/path/to/target-repo symlink
 ```
 
 ## Key commands

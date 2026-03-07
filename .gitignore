@@ -2,6 +2,10 @@ node_modules/
 **/node_modules/
 **/dist/
 .agent/runs/
+docs/reports/*
+!docs/reports/.gitkeep
+**/__pycache__/
+**/*.pyc
 .DS_Store
 npm-debug.log*
 coverage/
