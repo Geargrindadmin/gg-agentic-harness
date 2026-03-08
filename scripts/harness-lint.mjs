@@ -65,6 +65,7 @@ const requiredFiles = [
   '.agent/workflows/persona-dispatch.md',
   '.agent/workflows/runtime-parity-smoke.md',
   'scripts/agent-run-artifact.mjs',
+  'scripts/runtime-project-sync.mjs',
   'scripts/codex-project-sync.mjs',
   'scripts/dirty-worktree-guard.sh',
   'scripts/feedback-loop-report.mjs',
@@ -78,7 +79,8 @@ const requiredFiles = [
   'scripts/runtime-parity-smoke.mjs',
   'evals/persona-routing-corpus.json',
   'docs/decisions/0004-persona-registry-dispatch.md',
-  'docs/decisions/0005-compound-persona-runtime.md'
+  'docs/decisions/0005-compound-persona-runtime.md',
+  'docs/decisions/0007-runtime-activation-adapters.md'
 ];
 
 for (const file of requiredFiles) requireFile(file);

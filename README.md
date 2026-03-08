@@ -17,7 +17,7 @@ git clone https://github.com/Geargrindadmin/gg-agentic-harness.git
 cd gg-agentic-harness
 npm install
 npm run build
-npm run harness:codex:activate
+npm run harness:runtime:activate
 ```
 
 ## Remote install into a project (one command)
@@ -34,7 +34,7 @@ Arguments:
 ## Validate
 
 ```bash
-npm run harness:codex:status
+npm run harness:runtime:status
 npm run gg -- --json doctor
 npm run harness:runtime-parity
 npm run harness:persona:audit
@@ -45,7 +45,7 @@ npm run harness:persona:benchmark
 
 ```bash
 npm run gg -- portable init /absolute/path/to/target-repo --mode symlink
-npm run gg -- --project-root /absolute/path/to/target-repo codex activate /absolute/path/to/target-repo
+npm run gg -- --project-root /absolute/path/to/target-repo runtime activate /absolute/path/to/target-repo --runtime codex
 npm run gg -- portable verify /absolute/path/to/target-repo --runtime structure
 ```
 
@@ -63,25 +63,32 @@ npm run gg -- workflow list
 npm run gg -- workflow run paperclip-extracted "objective"
 npm run gg -- workflow run symphony-lite "task" --validate none
 npm run gg -- workflow run visual-explainer "subject" --evidence docs/README.md
-npm run harness:codex:status
-npm run harness:codex:activate
+npm run harness:runtime:status
+npm run harness:runtime:activate
 npm run harness:persona:audit
 npm run harness:persona:benchmark
 npm run harness:runtime-parity
 node scripts/persona-registry-resolve.mjs --prompt "ship auth hardening" --classification TASK --json
 ```
 
-## Codex activation
+## Runtime activation
 
-`gg-skills` and `filesystem` are project-scoped MCPs. A fresh install is not complete for Codex until the target project has been activated into `~/.codex`.
+The harness is model-agnostic, but some runtimes require host-level activation for repo-scoped MCPs. In Codex, `gg-skills` and `filesystem` are project-scoped and must be activated in `~/.codex`.
 
 ```bash
-npm run harness:codex:activate
-npm run harness:codex:status
+npm run harness:runtime:activate
+npm run harness:runtime:status
 ```
 
-Portable targets can be activated from the source harness CLI:
+You can target a runtime explicitly:
 
 ```bash
-node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo codex activate /absolute/path/to/target-repo
+node scripts/runtime-project-sync.mjs activate . --runtime codex
+node scripts/runtime-project-sync.mjs status . --runtime codex
+```
+
+Portable targets can be activated from the source harness CLI with runtime adapters:
+
+```bash
+node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo runtime activate /absolute/path/to/target-repo --runtime codex
 ```

@@ -96,11 +96,12 @@ Source of truth: `.agent/registry/mcp-runtime.json` (profile-specific and machin
 | google-maps-platform-code-assist | Maps platform docs/tools | 6 |
 | ide | Utility/debug helper tools | 6 |
 
-Codex-specific rule:
+Runtime-adapter rule:
 
-1. `gg-skills` and `filesystem` are repo-scoped MCPs.
-2. Before a Codex session in a new repo, run `npm run harness:codex:activate`.
-3. `npm run harness:runtime-parity` may warn if activation has not been applied on the current machine, but the local repo install can still be structurally correct.
+1. `gg-skills` and `filesystem` are repo-scoped MCPs for the codex runtime adapter.
+2. Before a codex runtime session in a new repo, run `npm run harness:runtime:activate` (defaults to `--runtime codex`).
+3. `runtime-project-sync.mjs` supports `codex|claude|kimi` and routes activation/status by adapter capability.
+4. `npm run harness:runtime-parity` may warn if host activation has not been applied on the current machine, but the local repo install can still be structurally correct.
 
 ---
 

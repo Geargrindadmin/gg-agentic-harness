@@ -26,6 +26,8 @@
     "harness:persona:sync": "node scripts/persona-registry-sync.mjs",
     "harness:persona:audit": "node scripts/persona-registry-audit.mjs",
     "harness:persona:benchmark": "node scripts/persona-registry-benchmark.mjs",
+    "harness:runtime:activate": "node scripts/runtime-project-sync.mjs activate --runtime codex",
+    "harness:runtime:status": "node scripts/runtime-project-sync.mjs status --runtime codex",
     "harness:codex:activate": "node scripts/codex-project-sync.mjs activate",
     "harness:codex:status": "node scripts/codex-project-sync.mjs status",
     "harness:runtime-parity": "node scripts/runtime-parity-smoke.mjs",

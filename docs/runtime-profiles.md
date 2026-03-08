@@ -33,29 +33,37 @@ Codex, Claude, and Kimi must execute the same memory strategy in this order:
 4. Keep workflow docs profile-aware: do not hard-code single-runtime commands as universal.
 5. Remote task tracking is CLI-first: use `node scripts/gws-task.mjs` plus `.agent/rules/remote-task-tracking.md` for `TASK|TASK_LITE|DECISION`.
 
-## Codex Project Activation
+## Runtime Project Activation
 
-`gg-skills` and `filesystem` are repo-scoped for Codex. Installing the harness into a new repo is not enough by itself; Codex must be activated against that repo so `~/.codex/config.toml` and `~/.codex/mcp.json` point at the current project.
+The harness is runtime-agnostic. Activation is runtime-adapter specific.
+
+Current adapters:
+
+1. `codex`: host-config activation required for repo-scoped MCPs (`gg-skills`, `filesystem`).
+2. `claude`: contract validation only in this harness (no host rewrite).
+3. `kimi`: contract validation only in this harness (no host rewrite).
 
 Commands:
 
 ```bash
-npm run harness:codex:activate
-npm run harness:codex:status
+npm run harness:runtime:activate
+npm run harness:runtime:status
 ```
 
 Portable target from the source harness:
 
 ```bash
-node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo codex activate /absolute/path/to/target-repo
+node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo runtime activate /absolute/path/to/target-repo --runtime codex
 ```
 
 Behavior:
 
-1. `activate` backs up the existing Codex config files.
-2. `activate` rewrites project trust plus `gg-skills` and `filesystem` MCP entries for the selected repo.
-3. Restart Codex after activation so the active session loads the new repo-scoped MCP paths.
-4. `npm run harness:runtime-parity` should treat missing activation as a warning, not a repo wiring failure.
+1. `activate` routes to the selected runtime adapter.
+2. For `--runtime codex`, activation backs up existing Codex config files.
+3. For `--runtime codex`, activation rewrites project trust plus `gg-skills` and `filesystem` MCP entries for the selected repo.
+4. For `--runtime claude|kimi`, activation returns contract status and does not mutate host config.
+5. Restart Codex after codex activation so the active session loads the new repo-scoped MCP paths.
+6. `npm run harness:runtime-parity` should treat missing activation as a warning, not a repo wiring failure.
 
 ## Validation
 
@@ -65,4 +73,4 @@ Run `node scripts/harness-lint.mjs` to verify:
 - persona registry and compound registry files exist,
 - runtime docs reference the same MCP registry and artifact contracts shipped by the harness.
 
-Run `npm run harness:codex:status` to confirm the current machine is activated for the repo you are working in.
+Run `npm run harness:runtime:status` to confirm the current machine/runtime adapter status for the repo you are working in.

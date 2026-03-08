@@ -54,6 +54,8 @@ const PORTABLE_REQUIRED_PACKAGE_SCRIPTS: Record<string, string> = {
   'harness:persona:sync': 'node scripts/persona-registry-sync.mjs',
   'harness:persona:audit': 'node scripts/persona-registry-audit.mjs',
   'harness:persona:benchmark': 'node scripts/persona-registry-benchmark.mjs',
+  'harness:runtime:activate': 'node scripts/runtime-project-sync.mjs activate --runtime codex',
+  'harness:runtime:status': 'node scripts/runtime-project-sync.mjs status --runtime codex',
   'harness:codex:activate': 'node scripts/codex-project-sync.mjs activate',
   'harness:codex:status': 'node scripts/codex-project-sync.mjs status',
   'harness:runtime-parity': 'node scripts/runtime-parity-smoke.mjs',
@@ -77,6 +79,7 @@ Usage:
   gg [--json] [--project-root <path>] workflow show <slug>
   gg [--json] [--project-root <path>] workflow run <slug> [args...] [--validate none|tsc|lint|test|all] [--evidence <path[,path]>]
   gg [--json] [--project-root <path>] run <init|gate|mcp|event|feedback|persona|complete> [--key value]
+  gg [--json] [--project-root <path>] runtime <activate|status> [targetDir] [--runtime codex|claude|kimi] [--codex-home <path>]
   gg [--json] [--project-root <path>] codex <activate|status> [targetDir] [--codex-home <path>]
   gg [--json] [--project-root <path>] context <check|refresh>
   gg [--json] [--project-root <path>] validate <tsc|lint|test|all>
@@ -713,17 +716,21 @@ function commandRun(projectRoot: string, action: string | undefined, argv: strin
   };
 }
 
-function commandCodex(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
+function commandRuntime(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
   if (!action || !['activate', 'status'].includes(action)) {
-    throw new Error('Usage: gg codex <activate|status> [targetDir] [--codex-home <path>]');
+    throw new Error('Usage: gg runtime <activate|status> [targetDir] [--runtime codex|claude|kimi] [--codex-home <path>]');
   }
 
-  const scriptPath = path.join(projectRoot, 'scripts', 'codex-project-sync.mjs');
+  const scriptPath = path.join(projectRoot, 'scripts', 'runtime-project-sync.mjs');
   const { flags, positionals } = parseArgs(argv);
   const targetRoot = path.resolve(positionals[0] || projectRoot);
   const args = [scriptPath, action, targetRoot];
+  const runtime = flagString(flags, 'runtime');
   const codexHome = flagString(flags, 'codex-home');
 
+  if (runtime) {
+    args.push('--runtime', runtime);
+  }
   if (codexHome) {
     args.push('--codex-home', codexHome);
   }
@@ -742,6 +749,11 @@ function commandCodex(projectRoot: string, action: string | undefined, argv: str
     code: result.code,
     payload: result.stdout.trim() ? JSON.parse(result.stdout) : null
   };
+}
+
+function commandCodex(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
+  const args = ['--runtime', 'codex', ...argv];
+  return commandRuntime(projectRoot, action, args, jsonMode);
 }
 
 function commandContext(projectRoot: string, action: string | undefined, jsonMode: boolean): CommandResult {
@@ -1001,7 +1013,7 @@ function commandPortableVerify(
   jsonMode: boolean
 ): CommandResult {
   const checks: Array<{ name: string; status: 'pass' | 'fail' | 'warn'; detail: string }> = [];
-  const codexActivationCommand = `node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} codex activate ${targetRoot}`;
+  const codexActivationCommand = `node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} runtime activate ${targetRoot} --runtime codex`;
 
   const promptCheck = validatePromptMirrors(targetRoot);
   checks.push({ name: 'prompt_mirror', status: promptCheck.ok ? 'pass' : 'fail', detail: promptCheck.detail });
@@ -1073,12 +1085,12 @@ function commandPortableVerify(
 
   const codexStatus = executeJsonNodeScript(
     targetRoot,
-    path.join(targetRoot, 'scripts', 'codex-project-sync.mjs'),
-    ['status', targetRoot, '--json']
+    path.join(targetRoot, 'scripts', 'runtime-project-sync.mjs'),
+    ['status', targetRoot, '--runtime', 'codex', '--json']
   );
   const codexActivation = codexStatus.parsed as { active?: boolean } | null;
   checks.push({
-    name: 'codex_activation',
+    name: 'runtime_activation_codex',
     status: codexActivation?.active ? 'pass' : 'warn',
     detail: codexActivation?.active
       ? 'Codex project-scoped MCPs are active for this target repo'
@@ -1110,7 +1122,7 @@ function commandPortableVerify(
     );
     const smokePayload = smoke.parsed as { results?: Array<{ id?: string; status?: string }> } | null;
     const structuralFailures = (smokePayload?.results || []).filter(
-      (entry) => entry.status === 'fail' && entry.id !== 'codex_gg_skills'
+      (entry) => entry.status === 'fail' && entry.id !== 'runtime_activation_codex_gg_skills'
     );
     checks.push({
       name: 'runtime_parity_smoke',
@@ -1238,7 +1250,7 @@ function commandPortable(projectRoot: string, action: string | undefined, argv: 
       `3. Run \`node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} doctor\`.`,
       '4. Activate Codex project-scoped MCPs:',
       '```bash',
-      `node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} codex activate ${targetRoot}`,
+      `node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} runtime activate ${targetRoot} --runtime codex`,
       '```',
       `5. Run \`node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${projectRoot} portable verify ${targetRoot} --runtime structure\`.`,
       '6. Run `npm run harness:runtime-parity` to confirm Codex/Claude/Kimi parity wiring.',
@@ -1306,6 +1318,9 @@ function main(): void {
         break;
       case 'run':
         result = commandRun(projectRoot, maybeAction, rest, jsonMode);
+        break;
+      case 'runtime':
+        result = commandRuntime(projectRoot, maybeAction, rest, jsonMode);
         break;
       case 'codex':
         result = commandCodex(projectRoot, maybeAction, rest, jsonMode);

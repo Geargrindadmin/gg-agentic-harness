@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { getCodexProjectState } from './codex-project-sync.mjs';
+import { getRuntimeProjectState } from './runtime-project-sync.mjs';
 
 const repoRoot = process.cwd();
 const args = new Set(process.argv.slice(2));
@@ -155,15 +155,28 @@ function checkCodexTomlConfig(expected) {
   };
 }
 
-function checkCodexProjectScopedConfig() {
-  const state = getCodexProjectState(repoRoot);
+function checkRuntimeProjectScopedConfig(runtime) {
+  const state = getRuntimeProjectState(repoRoot, runtime);
   const checks = Object.fromEntries(state.checks.map((check) => [check.id, check]));
-  const remediation = `Run: node scripts/codex-project-sync.mjs activate ${repoRoot}`;
+  const remediation = `Run: node scripts/runtime-project-sync.mjs activate ${repoRoot} --runtime ${runtime}`;
+
+  if (runtime !== 'codex') {
+    return [
+      {
+        status: state.active ? 'pass' : 'warn',
+        id: `runtime_activation_${runtime}`,
+        summary: state.active
+          ? `${runtime} runtime contract is active for this repo`
+          : `${runtime} runtime contract is not fully active for this repo`,
+        detail: remediation
+      }
+    ];
+  }
 
   return [
     {
       status: checks.gg_skills_toml?.ok && checks.gg_skills_json?.ok ? 'pass' : 'warn',
-      id: 'codex_gg_skills',
+      id: 'runtime_activation_codex_gg_skills',
       summary: checks.gg_skills_toml?.ok && checks.gg_skills_json?.ok
         ? 'Codex gg-skills paths point at this repo'
         : 'Codex gg-skills paths are not activated for this repo',
@@ -171,7 +184,7 @@ function checkCodexProjectScopedConfig() {
     },
     {
       status: checks.filesystem_toml?.ok && checks.filesystem_json?.ok ? 'pass' : 'warn',
-      id: 'codex_filesystem',
+      id: 'runtime_activation_codex_filesystem',
       summary: checks.filesystem_toml?.ok && checks.filesystem_json?.ok
         ? 'Codex filesystem scope points at this repo'
         : 'Codex filesystem scope is not activated for this repo',
@@ -179,7 +192,7 @@ function checkCodexProjectScopedConfig() {
     },
     {
       status: checks.project_trusted?.ok ? 'pass' : 'warn',
-      id: 'codex_project_trust',
+      id: 'runtime_activation_codex_project_trust',
       summary: checks.project_trusted?.ok
         ? 'Codex project trust is configured for this repo'
         : 'Codex project trust is not configured for this repo',
@@ -329,7 +342,9 @@ async function main() {
     checkClaudePlugin(expected),
     checkCodexJsonConfig(expected),
     checkCodexTomlConfig(expected),
-    ...checkCodexProjectScopedConfig(),
+    ...checkRuntimeProjectScopedConfig('codex'),
+    ...checkRuntimeProjectScopedConfig('claude'),
+    ...checkRuntimeProjectScopedConfig('kimi'),
     checkKimiContract(expected),
     await checkWorkerHealth()
   ];

@@ -5,7 +5,7 @@ TARGET_DIR="${1:-$(pwd)}"
 MODE="${2:-symlink}"
 HARNESS_HOME="${HARNESS_HOME:-$HOME/.gg-agentic-harness}"
 REPO_URL="${REPO_URL:-https://github.com/Geargrindadmin/gg-agentic-harness.git}"
-ACTIVATE_CODEX="${ACTIVATE_CODEX:-1}"
+ACTIVATE_RUNTIME="${ACTIVATE_RUNTIME:-codex}"
 
 if [[ "$MODE" != "symlink" && "$MODE" != "copy" ]]; then
   echo "Invalid mode: $MODE (expected: symlink|copy)" >&2
@@ -26,18 +26,18 @@ node "$HARNESS_HOME/packages/gg-cli/dist/index.js" \
   --project-root "$HARNESS_HOME" \
   portable init "$TARGET_DIR" --mode "$MODE"
 
-if [[ "$ACTIVATE_CODEX" == "1" ]]; then
+if [[ "$ACTIVATE_RUNTIME" != "none" ]]; then
   node "$HARNESS_HOME/packages/gg-cli/dist/index.js" \
     --project-root "$TARGET_DIR" \
-    codex activate "$TARGET_DIR"
+    runtime activate "$TARGET_DIR" --runtime "$ACTIVATE_RUNTIME"
 fi
 
 echo "Harness installed into: $TARGET_DIR"
 echo "Source harness: $HARNESS_HOME"
 echo "Verify target: node \"$HARNESS_HOME/packages/gg-cli/dist/index.js\" --project-root \"$TARGET_DIR\" --json doctor"
-if [[ "$ACTIVATE_CODEX" == "1" ]]; then
-  echo "Codex activated for target: $TARGET_DIR"
+if [[ "$ACTIVATE_RUNTIME" != "none" ]]; then
+  echo "Runtime activation completed for target (runtime=$ACTIVATE_RUNTIME): $TARGET_DIR"
 else
-  echo "Codex activation skipped. Run: node \"$HARNESS_HOME/packages/gg-cli/dist/index.js\" --project-root \"$TARGET_DIR\" codex activate \"$TARGET_DIR\""
+  echo "Runtime activation skipped. Run: node \"$HARNESS_HOME/packages/gg-cli/dist/index.js\" --project-root \"$TARGET_DIR\" runtime activate \"$TARGET_DIR\" --runtime codex"
 fi
 echo "Portable verify: node \"$HARNESS_HOME/packages/gg-cli/dist/index.js\" --project-root \"$HARNESS_HOME\" portable verify \"$TARGET_DIR\" --runtime structure"
