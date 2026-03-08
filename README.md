@@ -10,6 +10,11 @@ Portable agentic harness extracted from GGV3.
 - `.agent` skills/workflows/rules/templates plus persona files and registries
 - Harness scripts for run artifacts, persona routing, runtime parity, feedback loops, context generation, and Obsidian logging
 
+## Architecture diagram
+
+- Diagram source: [docs/architecture/agentic-harness-logic-loops-diagram.html](docs/architecture/agentic-harness-logic-loops-diagram.html)
+- Live HTML preview: [Open rendered diagram](https://htmlpreview.github.io/?https://raw.githubusercontent.com/Geargrindadmin/gg-agentic-harness/main/docs/architecture/agentic-harness-logic-loops-diagram.html)
+
 ## Install
 
 ```bash
