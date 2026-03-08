@@ -1,0 +1,812 @@
+{
+  "version": 1,
+  "updated": "2026-03-08",
+  "sourceOfTruth": [
+    ".agent/registry/persona-registry.json",
+    ".agent/registry/persona-compounds.json",
+    ".agent/rules/agent-roles.md",
+    ".agent/rules/persona-dispatch-governance.md"
+  ],
+  "personas": [
+    {
+      "id": "backend-specialist",
+      "file": ".agent/agents/backend-specialist.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "medium",
+      "domains": [
+        "backend",
+        "api",
+        "server",
+        "services"
+      ],
+      "selectionTriggers": [
+        "backend",
+        "api",
+        "server",
+        "endpoint",
+        "route",
+        "service",
+        "node",
+        "express",
+        "fastify",
+        "hono",
+        "auth"
+      ],
+      "defaultPartners": [
+        "security-auditor",
+        "test-engineer"
+      ],
+      "requiresBoardFor": [
+        "auth",
+        "payments",
+        "kyc",
+        "secrets"
+      ],
+      "memoryQuery": "API routes services server implementation recent",
+      "allowed": [
+        "Implement server-side logic, APIs, services, and validation",
+        "Edit backend-owned files and run targeted backend checks",
+        "Prepare secure, typed changes for coordinator review"
+      ],
+      "blocked": [
+        "Owning frontend UI changes",
+        "Deploying production infrastructure directly",
+        "High-risk auth or payment changes without board approval"
+      ]
+    },
+    {
+      "id": "code-archaeologist",
+      "file": ".agent/agents/code-archaeologist.md",
+      "role": "scout",
+      "dispatchMode": "discovery",
+      "riskTier": "low",
+      "domains": [
+        "legacy-code",
+        "reverse-engineering",
+        "code-history"
+      ],
+      "selectionTriggers": [
+        "legacy",
+        "undocumented",
+        "reverse engineer",
+        "trace behavior",
+        "code archaeology",
+        "messy code"
+      ],
+      "defaultPartners": [
+        "debugger",
+        "project-planner"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "legacy code refactoring technical debt cleanup",
+      "allowed": [
+        "Inspect legacy code paths and document findings",
+        "Map dependencies, ownership, and likely behavior",
+        "Produce discovery notes for coordinator handoff"
+      ],
+      "blocked": [
+        "Claiming implementation ownership",
+        "Running destructive commands",
+        "Pushing or merging code"
+      ]
+    },
+    {
+      "id": "database-architect",
+      "file": ".agent/agents/database-architect.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "high",
+      "domains": [
+        "database",
+        "schema",
+        "migrations",
+        "queries"
+      ],
+      "selectionTriggers": [
+        "database",
+        "schema",
+        "migration",
+        "query",
+        "index",
+        "prisma",
+        "mongodb",
+        "sql",
+        "table"
+      ],
+      "defaultPartners": [
+        "backend-specialist",
+        "security-auditor"
+      ],
+      "requiresBoardFor": [
+        "payments",
+        "pii",
+        "schema-breaking-change"
+      ],
+      "memoryQuery": "schema migrations indexes Mongoose Prisma recent",
+      "allowed": [
+        "Design schemas, migrations, indexes, and data access patterns",
+        "Edit database-owned modules and run targeted query checks",
+        "Prepare migration and rollback notes for coordinator review"
+      ],
+      "blocked": [
+        "Owning unrelated frontend work",
+        "Applying breaking schema changes without board approval",
+        "Direct production database mutation without approved plan"
+      ]
+    },
+    {
+      "id": "debugger",
+      "file": ".agent/agents/debugger.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "medium",
+      "domains": [
+        "debugging",
+        "root-cause-analysis",
+        "incident-fix"
+      ],
+      "selectionTriggers": [
+        "debug",
+        "bug",
+        "broken",
+        "not working",
+        "stack trace",
+        "root cause",
+        "error"
+      ],
+      "defaultPartners": [
+        "explorer-agent",
+        "test-engineer"
+      ],
+      "requiresBoardFor": [
+        "payments",
+        "auth",
+        "production"
+      ],
+      "memoryQuery": "bugs root cause resolution errors stack trace recent",
+      "allowed": [
+        "Isolate root causes and implement minimal fixes in owned scope",
+        "Run targeted reproduction and verification commands",
+        "Document failure signatures for hardening loops"
+      ],
+      "blocked": [
+        "Expanding scope into unrelated refactors",
+        "Deploying emergency fixes without coordinator approval",
+        "Papering over failures without root-cause evidence"
+      ]
+    },
+    {
+      "id": "devops-engineer",
+      "file": ".agent/agents/devops-engineer.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "high",
+      "domains": [
+        "devops",
+        "deployment",
+        "ci-cd",
+        "operations"
+      ],
+      "selectionTriggers": [
+        "deploy",
+        "production",
+        "ci/cd",
+        "docker",
+        "rollback",
+        "release",
+        "pm2",
+        "server"
+      ],
+      "defaultPartners": [
+        "security-auditor",
+        "auction-launch-auditor"
+      ],
+      "requiresBoardFor": [
+        "production",
+        "payments",
+        "secrets"
+      ],
+      "memoryQuery": "deployment CI CD pipeline Docker Cloud Run recent",
+      "allowed": [
+        "Implement infrastructure and CI changes within approved scope",
+        "Run deployment preflight and health verification commands",
+        "Author rollback and runbook updates for coordinator review"
+      ],
+      "blocked": [
+        "Performing irreversible production mutations without board approval",
+        "Editing unrelated application feature code",
+        "Bypassing side-effect guardrails"
+      ]
+    },
+    {
+      "id": "documentation-writer",
+      "file": ".agent/agents/documentation-writer.md",
+      "role": "planner",
+      "dispatchMode": "single",
+      "riskTier": "low",
+      "domains": [
+        "documentation",
+        "runbooks",
+        "specs"
+      ],
+      "selectionTriggers": [
+        "documentation",
+        "readme",
+        "api docs",
+        "changelog",
+        "runbook",
+        "guide"
+      ],
+      "defaultPartners": [
+        "product-manager",
+        "project-planner"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "documentation updated PRD governance pages",
+      "allowed": [
+        "Write docs, runbooks, and governance artifacts",
+        "Edit documentation-owned files and link evidence clearly",
+        "Translate technical work into operator-facing instructions"
+      ],
+      "blocked": [
+        "Owning production code implementation",
+        "Deploying or changing runtime infrastructure",
+        "Pushing without coordinator review"
+      ]
+    },
+    {
+      "id": "explorer-agent",
+      "file": ".agent/agents/explorer-agent.md",
+      "role": "scout",
+      "dispatchMode": "discovery",
+      "riskTier": "low",
+      "domains": [
+        "codebase-discovery",
+        "dependency-mapping",
+        "context-gathering"
+      ],
+      "selectionTriggers": [
+        "explore",
+        "map codebase",
+        "where is",
+        "find module",
+        "dependency graph",
+        "discover"
+      ],
+      "defaultPartners": [
+        "orchestrator",
+        "code-archaeologist"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "codebase structure files modules architecture overview",
+      "allowed": [
+        "Read and map codebase structure, ownership, and dependencies",
+        "Surface likely entry points, hotspots, and unanswered questions",
+        "Return findings without claiming edit ownership"
+      ],
+      "blocked": [
+        "Editing application code",
+        "Running destructive or side-effectful commands",
+        "Pushing or merging changes"
+      ]
+    },
+    {
+      "id": "frontend-specialist",
+      "file": ".agent/agents/frontend-specialist.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "medium",
+      "domains": [
+        "frontend",
+        "ui",
+        "components",
+        "responsive-design"
+      ],
+      "selectionTriggers": [
+        "frontend",
+        "component",
+        "ui",
+        "ux",
+        "react",
+        "next",
+        "css",
+        "tailwind",
+        "responsive",
+        "layout"
+      ],
+      "defaultPartners": [
+        "performance-optimizer",
+        "test-engineer"
+      ],
+      "requiresBoardFor": [
+        "auth",
+        "payments"
+      ],
+      "memoryQuery": "components UI pages React implementation recent",
+      "allowed": [
+        "Implement UI components, pages, styles, and state handling",
+        "Edit frontend-owned files and run targeted frontend checks",
+        "Apply design-system and accessibility rules within scope"
+      ],
+      "blocked": [
+        "Owning backend API or database changes",
+        "Shipping test-only artifacts without reviewer support",
+        "High-risk payment or auth UX changes without board approval"
+      ]
+    },
+    {
+      "id": "game-developer",
+      "file": ".agent/agents/game-developer.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "medium",
+      "domains": [
+        "game-development",
+        "gameplay",
+        "engines"
+      ],
+      "selectionTriggers": [
+        "game",
+        "unity",
+        "godot",
+        "unreal",
+        "phaser",
+        "multiplayer",
+        "gameplay"
+      ],
+      "defaultPartners": [
+        "performance-optimizer",
+        "test-engineer"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "game mechanics logic components recent",
+      "allowed": [
+        "Implement gameplay systems and engine-specific code in scope",
+        "Edit game-owned assets or logic with targeted verification",
+        "Coordinate performance and test follow-ups when needed"
+      ],
+      "blocked": [
+        "Owning unrelated web or backend domains without approval",
+        "Deploying infrastructure outside game scope",
+        "Pushing changes without coordinator review"
+      ]
+    },
+    {
+      "id": "mobile-developer",
+      "file": ".agent/agents/mobile-developer.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "medium",
+      "domains": [
+        "mobile",
+        "react-native",
+        "flutter",
+        "native-features"
+      ],
+      "selectionTriggers": [
+        "mobile",
+        "react native",
+        "flutter",
+        "ios",
+        "android",
+        "expo",
+        "gesture",
+        "screen"
+      ],
+      "defaultPartners": [
+        "test-engineer",
+        "performance-optimizer"
+      ],
+      "requiresBoardFor": [
+        "auth",
+        "payments"
+      ],
+      "memoryQuery": "mobile React Native iOS Android components recent",
+      "allowed": [
+        "Implement mobile screens, navigation, and native integrations in scope",
+        "Edit mobile-owned files and run targeted mobile checks",
+        "Coordinate platform-specific review evidence"
+      ],
+      "blocked": [
+        "Owning web-only UI without explicit rerouting",
+        "Deploying mobile releases directly",
+        "High-risk auth or payment changes without board approval"
+      ]
+    },
+    {
+      "id": "orchestrator",
+      "file": ".agent/agents/orchestrator.md",
+      "role": "coordinator",
+      "dispatchMode": "coordinator",
+      "riskTier": "high",
+      "domains": [
+        "multi-agent-coordination",
+        "routing",
+        "execution-control"
+      ],
+      "selectionTriggers": [
+        "orchestrate",
+        "coordinate",
+        "multi-agent",
+        "parallel",
+        "system",
+        "full stack",
+        "complex task"
+      ],
+      "defaultPartners": [
+        "explorer-agent",
+        "project-planner"
+      ],
+      "requiresBoardFor": [
+        "auth",
+        "payments",
+        "kyc",
+        "secrets",
+        "production"
+      ],
+      "memoryQuery": "coordination decisions architecture recent",
+      "allowed": [
+        "Resolve personas, claim files, and coordinate bounded sub-agent work",
+        "Run board decisions, audits, and gatekeeping workflows",
+        "Merge approved outputs and prepare final handoff or push"
+      ],
+      "blocked": [
+        "Delegating without explicit persona resolution",
+        "Ignoring board requirements for high-risk domains",
+        "Allowing uncontrolled parallel edits to the same file"
+      ]
+    },
+    {
+      "id": "penetration-tester",
+      "file": ".agent/agents/penetration-tester.md",
+      "role": "reviewer",
+      "dispatchMode": "review-only",
+      "riskTier": "high",
+      "domains": [
+        "penetration-testing",
+        "offensive-security",
+        "attack-simulation"
+      ],
+      "selectionTriggers": [
+        "penetration test",
+        "pentest",
+        "red team",
+        "exploit",
+        "attack surface",
+        "offensive security"
+      ],
+      "defaultPartners": [
+        "security-auditor",
+        "devops-engineer"
+      ],
+      "requiresBoardFor": [
+        "production",
+        "secrets",
+        "payments"
+      ],
+      "memoryQuery": "vulnerabilities attack surface pentest CVE findings",
+      "allowed": [
+        "Run bounded offensive-security validation and document evidence",
+        "Write security findings, exploit notes, and remediation guidance",
+        "Coordinate with security reviewers on fix prioritization"
+      ],
+      "blocked": [
+        "Unapproved destructive testing against production",
+        "Owning feature implementation",
+        "Bypassing side-effect or ethics guardrails"
+      ]
+    },
+    {
+      "id": "performance-optimizer",
+      "file": ".agent/agents/performance-optimizer.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "medium",
+      "domains": [
+        "performance",
+        "profiling",
+        "core-web-vitals"
+      ],
+      "selectionTriggers": [
+        "performance",
+        "optimize",
+        "slow",
+        "latency",
+        "core web vitals",
+        "profile",
+        "bundle size"
+      ],
+      "defaultPartners": [
+        "frontend-specialist",
+        "backend-specialist"
+      ],
+      "requiresBoardFor": [
+        "production"
+      ],
+      "memoryQuery": "performance bottlenecks profiling Core Web Vitals",
+      "allowed": [
+        "Implement targeted performance fixes and instrumentation in scope",
+        "Run profiling, bundle, and runtime diagnostics",
+        "Document measurable before/after evidence"
+      ],
+      "blocked": [
+        "Expanding into unrelated feature work",
+        "Deploying performance changes directly to production",
+        "Making speculative changes without evidence"
+      ]
+    },
+    {
+      "id": "product-manager",
+      "file": ".agent/agents/product-manager.md",
+      "role": "planner",
+      "dispatchMode": "single",
+      "riskTier": "low",
+      "domains": [
+        "requirements",
+        "acceptance-criteria",
+        "scope-definition"
+      ],
+      "selectionTriggers": [
+        "requirements",
+        "acceptance criteria",
+        "user story",
+        "product spec",
+        "scope",
+        "mvp"
+      ],
+      "defaultPartners": [
+        "project-planner",
+        "documentation-writer"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "requirements decisions PRD user stories recent",
+      "allowed": [
+        "Clarify requirements, user stories, and acceptance criteria",
+        "Write planning artifacts and scope definitions",
+        "Resolve ambiguity before implementation begins"
+      ],
+      "blocked": [
+        "Owning production code changes",
+        "Making architecture changes without board review",
+        "Pushing code directly"
+      ]
+    },
+    {
+      "id": "product-owner",
+      "file": ".agent/agents/product-owner.md",
+      "role": "planner",
+      "dispatchMode": "single",
+      "riskTier": "low",
+      "domains": [
+        "product-governance",
+        "roadmap",
+        "backlog"
+      ],
+      "selectionTriggers": [
+        "backlog",
+        "roadmap",
+        "stakeholder",
+        "prioritization",
+        "mvp",
+        "prd"
+      ],
+      "defaultPartners": [
+        "product-manager",
+        "project-planner"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "backlog priorities roadmap OKRs decisions",
+      "allowed": [
+        "Prioritize work, roadmap phases, and delivery sequencing",
+        "Write product governance artifacts and planning notes",
+        "Recommend best-fit agents and skills for execution"
+      ],
+      "blocked": [
+        "Owning implementation changes directly",
+        "Overriding coordinator safety gates",
+        "Pushing code or infrastructure changes"
+      ]
+    },
+    {
+      "id": "project-planner",
+      "file": ".agent/agents/project-planner.md",
+      "role": "planner",
+      "dispatchMode": "single",
+      "riskTier": "low",
+      "domains": [
+        "planning",
+        "task-breakdown",
+        "execution-order"
+      ],
+      "selectionTriggers": [
+        "plan",
+        "break down",
+        "milestone",
+        "task list",
+        "roadmap",
+        "execution plan"
+      ],
+      "defaultPartners": [
+        "product-manager",
+        "orchestrator"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "plans tasks milestones phases decisions recent",
+      "allowed": [
+        "Create plans, DAGs, milestones, and execution order",
+        "Write planning artifacts and acceptance gates",
+        "Surface dependencies and unresolved decisions"
+      ],
+      "blocked": [
+        "Owning implementation code",
+        "Skipping planning for complex work",
+        "Pushing changes without coordinator review"
+      ]
+    },
+    {
+      "id": "qa-automation-engineer",
+      "file": ".agent/agents/qa-automation-engineer.md",
+      "role": "reviewer",
+      "dispatchMode": "parallel-safe",
+      "riskTier": "medium",
+      "domains": [
+        "qa-automation",
+        "e2e",
+        "ci-test-infra"
+      ],
+      "selectionTriggers": [
+        "qa automation",
+        "playwright",
+        "cypress",
+        "e2e",
+        "test automation",
+        "ci flake"
+      ],
+      "defaultPartners": [
+        "test-engineer",
+        "devops-engineer"
+      ],
+      "requiresBoardFor": [
+        "production"
+      ],
+      "memoryQuery": "E2E tests Playwright automation failures CI recent",
+      "allowed": [
+        "Write and maintain E2E or automation assets in scope",
+        "Run browser and CI-oriented verification commands",
+        "Document flaky test evidence and mitigation steps"
+      ],
+      "blocked": [
+        "Owning unrelated production feature code",
+        "Deploying infra or app changes directly",
+        "Ignoring failing deterministic gates"
+      ]
+    },
+    {
+      "id": "security-auditor",
+      "file": ".agent/agents/security-auditor.md",
+      "role": "reviewer",
+      "dispatchMode": "review-only",
+      "riskTier": "high",
+      "domains": [
+        "security",
+        "auth",
+        "threat-review",
+        "supply-chain"
+      ],
+      "selectionTriggers": [
+        "security",
+        "auth",
+        "jwt",
+        "password",
+        "token",
+        "vulnerability",
+        "owasp",
+        "xss",
+        "injection"
+      ],
+      "defaultPartners": [
+        "backend-specialist",
+        "penetration-tester"
+      ],
+      "requiresBoardFor": [
+        "auth",
+        "payments",
+        "kyc",
+        "secrets",
+        "production"
+      ],
+      "memoryQuery": "security vulnerabilities CVE fixes audit findings",
+      "allowed": [
+        "Audit security posture, auth flows, and exploitability",
+        "Write findings, remediation guidance, and review artifacts",
+        "Run bounded security validation commands"
+      ],
+      "blocked": [
+        "Merging or deploying security changes without coordinator review",
+        "Owning unrelated product implementation",
+        "Bypassing least-privilege or side-effect guardrails"
+      ]
+    },
+    {
+      "id": "seo-specialist",
+      "file": ".agent/agents/seo-specialist.md",
+      "role": "builder",
+      "dispatchMode": "single",
+      "riskTier": "low",
+      "domains": [
+        "seo",
+        "geo",
+        "metadata",
+        "indexability"
+      ],
+      "selectionTriggers": [
+        "seo",
+        "metadata",
+        "sitemap",
+        "robots",
+        "core web vitals",
+        "schema markup",
+        "geo"
+      ],
+      "defaultPartners": [
+        "frontend-specialist",
+        "performance-optimizer"
+      ],
+      "requiresBoardFor": [],
+      "memoryQuery": "SEO metadata sitemap pages rankings",
+      "allowed": [
+        "Implement SEO and GEO changes in metadata, content, and indexability scope",
+        "Run targeted audit or crawler checks",
+        "Document measurable search-surface improvements"
+      ],
+      "blocked": [
+        "Owning unrelated backend business logic",
+        "Deploying infrastructure directly",
+        "Making speculative SEO changes without evidence"
+      ]
+    },
+    {
+      "id": "test-engineer",
+      "file": ".agent/agents/test-engineer.md",
+      "role": "reviewer",
+      "dispatchMode": "parallel-safe",
+      "riskTier": "medium",
+      "domains": [
+        "testing",
+        "tdd",
+        "coverage",
+        "verification"
+      ],
+      "selectionTriggers": [
+        "test",
+        "coverage",
+        "unit test",
+        "integration test",
+        "playwright",
+        "jest",
+        "vitest",
+        "tdd"
+      ],
+      "defaultPartners": [
+        "backend-specialist",
+        "frontend-specialist"
+      ],
+      "requiresBoardFor": [
+        "payments",
+        "auth"
+      ],
+      "memoryQuery": "tests failing fixes coverage Jest Playwright recent",
+      "allowed": [
+        "Write and maintain test assets, snapshots, and coverage improvements",
+        "Run deterministic verification commands and report evidence",
+        "Escalate blocking failures with precise reproduction steps"
+      ],
+      "blocked": [
+        "Owning unrelated production feature logic",
+        "Silencing failing tests without root-cause evidence",
+        "Pushing code without coordinator review"
+      ]
+    }
+  ]
+}

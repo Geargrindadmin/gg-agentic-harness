@@ -11,20 +11,22 @@ $ARGUMENTS
 
 ---
 
-## 🔴 CRITICAL: Minimum Agent Requirement
+## CRITICAL: Persona Registry Gate
 
-> ⚠️ **ORCHESTRATION = MINIMUM 3 DIFFERENT AGENTS**
-> 
-> If you use fewer than 3 agents, you are NOT orchestrating - you're just delegating.
-> 
-> **Validation before completion:**
-> - Count invoked agents
-> - If `agent_count < 3` → STOP and invoke more agents
-> - Single agent = FAILURE of orchestration
+> ⚠️ **ORCHESTRATION STARTS WITH REGISTRY RESOLUTION**
+>
+> Before selecting any specialist, you must resolve the approved persona set:
+>
+> ```bash
+> node scripts/persona-registry-audit.mjs
+> node scripts/persona-registry-resolve.mjs --prompt "$ARGUMENTS" --classification TASK --json
+> ```
+>
+> Use the resolved `primaryPersona` and collaborator set as the only approved initial fanout. If `compoundPersona` is returned, it becomes the effective dispatch contract.
 
-### Agent Selection Matrix
+### Agent Selection Matrix (Legacy Fallback Only)
 
-| Task Type | REQUIRED Agents (minimum) |
+| Task Type | Fallback Personas |
 |-----------|---------------------------|
 | **Web App** | frontend-specialist, backend-specialist, test-engineer |
 | **API** | backend-specialist, security-auditor, test-engineer |

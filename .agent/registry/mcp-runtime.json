@@ -3,7 +3,7 @@
   "updated": "2026-03-07",
   "profiles": {
     "codex": {
-      "description": "Primary Codex runtime profile for GGV3 development.",
+      "description": "Primary Codex runtime profile for portable harness installs. Optional claude-mem parity plugin may extend this set.",
       "mcpServers": [
         "CodeLogic",
         "MongoDB",
@@ -36,6 +36,9 @@
         "gg-agent-bridge",
         "clickhouse",
         "postgresql"
+      ],
+      "optional": [
+        "claude-mem"
       ]
     },
     "claude": {
@@ -104,6 +107,9 @@
         "playwright",
         "clickhouse",
         "postgresql"
+      ],
+      "optional": [
+        "claude-mem"
       ]
     }
   }

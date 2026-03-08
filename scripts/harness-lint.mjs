@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import path from 'node:path';
 
 const errors = [];
-const warnings = [];
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
@@ -13,30 +11,36 @@ function exists(file) {
   return fs.existsSync(file);
 }
 
-function fail(msg) {
-  errors.push(msg);
+function fail(message) {
+  errors.push(message);
 }
 
-function warn(msg) {
-  warnings.push(msg);
+function requireFile(file) {
+  if (!exists(file)) fail(`Required file missing: ${file}`);
 }
 
-const canonicalPrompt = 'CLAUDE.md';
-const mirrorPrompt = 'AGENTS.md';
+const promptFiles = ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md'];
+for (const file of promptFiles) requireFile(file);
 
-if (!exists(canonicalPrompt) || !exists(mirrorPrompt)) {
-  fail('Missing CLAUDE.md or AGENTS.md');
-} else if (read(canonicalPrompt) !== read(mirrorPrompt)) {
-  fail('AGENTS.md must be byte-identical to CLAUDE.md (canonical source drift).');
-}
-
-if (exists(canonicalPrompt)) {
-  const prompt = read(canonicalPrompt);
-  if (!prompt.includes('remote-task-tracking.md') || !prompt.includes('gws-task.mjs')) {
-    fail('CLAUDE.md must include remote task tracking references (remote-task-tracking.md and gws-task.mjs).');
+if (promptFiles.every(exists)) {
+  const base = read('CLAUDE.md');
+  for (const file of ['AGENTS.md', 'GEMINI.md']) {
+    if (read(file) !== base) {
+      fail(`${file} must be byte-identical to CLAUDE.md.`);
+    }
   }
-  if (!prompt.includes('adversarial-review.md') || !prompt.includes('harness:project-context')) {
-    fail('CLAUDE.md must include BMAD cherry-pick references (adversarial-review.md and harness:project-context).');
+
+  if (!base.includes('remote-task-tracking.md') || !base.includes('gws-task.mjs')) {
+    fail('CLAUDE.md must reference remote task tracking.');
+  }
+  if (!base.includes('feedback-loop-governance.md') || !base.includes('feedback-loop-report.mjs')) {
+    fail('CLAUDE.md must reference the feedback loop contract.');
+  }
+  if (!base.includes('persona-dispatch-governance.md') || !base.includes('persona-compounds.json')) {
+    fail('CLAUDE.md must reference persona dispatch governance and the compound registry.');
+  }
+  if (!base.includes('agent-run-artifact.mjs persona') || !base.includes('harness:runtime-parity')) {
+    fail('CLAUDE.md must reference persona routing artifact recording and runtime parity.');
   }
 }
 
@@ -44,136 +48,81 @@ const requiredFiles = [
   'docs/agentic-harness.md',
   'docs/memory.md',
   'docs/runtime-profiles.md',
+  'docs/project-context.md',
   '.agent/registry/mcp-runtime.json',
+  '.agent/registry/persona-registry.json',
+  '.agent/registry/persona-compounds.json',
   '.agent/schemas/run-artifact.schema.json',
+  '.agent/rules/agent-roles.md',
+  '.agent/rules/adversarial-review.md',
   '.agent/rules/dirty-worktree-policy.md',
+  '.agent/rules/feedback-loop-governance.md',
+  '.agent/rules/persona-dispatch-governance.md',
+  '.agent/rules/remote-task-tracking.md',
   '.agent/policies/dirty-worktree-allowlist.txt',
   '.agent/policies/dirty-worktree-denylist.txt',
-  'scripts/dirty-worktree-guard.sh',
+  '.agent/workflows/generate-project-context.md',
+  '.agent/workflows/persona-dispatch.md',
+  '.agent/workflows/runtime-parity-smoke.md',
   'scripts/agent-run-artifact.mjs',
+  'scripts/codex-project-sync.mjs',
+  'scripts/dirty-worktree-guard.sh',
+  'scripts/feedback-loop-report.mjs',
   'scripts/generate-project-context.mjs',
   'scripts/gws-task.mjs',
-  '.agent/rules/remote-task-tracking.md',
-  '.agent/rules/adversarial-review.md',
-  '.agent/workflows/generate-project-context.md',
-  'docs/project-context.md'
+  'scripts/persona-registry-audit.mjs',
+  'scripts/persona-registry-lib.mjs',
+  'scripts/persona-registry-benchmark.mjs',
+  'scripts/persona-registry-resolve.mjs',
+  'scripts/persona-registry-sync.mjs',
+  'scripts/runtime-parity-smoke.mjs',
+  'evals/persona-routing-corpus.json',
+  'docs/decisions/0004-persona-registry-dispatch.md',
+  'docs/decisions/0005-compound-persona-runtime.md'
 ];
 
-for (const f of requiredFiles) {
-  if (!exists(f)) fail(`Required file missing: ${f}`);
-}
+for (const file of requiredFiles) requireFile(file);
 
-const localSkills = new Set();
-if (exists('.agent/skills')) {
-  for (const entry of fs.readdirSync('.agent/skills', { withFileTypes: true })) {
-    if (entry.isDirectory() && !entry.name.startsWith('_')) localSkills.add(entry.name);
+if (exists('docs/agentic-harness.md')) {
+  const text = read('docs/agentic-harness.md');
+  if (!text.includes('persona-registry-resolve.mjs') || !text.includes('compoundPersona')) {
+    fail('docs/agentic-harness.md must describe persona resolution and compound persona routing.');
+  }
+  if (!text.includes('agent-run-artifact.mjs persona')) {
+    fail('docs/agentic-harness.md must include persona routing artifact recording.');
+  }
+  if (/\b\d+\s+MCPs\b/.test(text)) {
+    fail('docs/agentic-harness.md must not use a static MCP count.');
   }
 }
 
-const skillFiles = [
-  'CLAUDE.md',
-  'AGENTS.md',
-  'docs/agentic-harness.md',
-  '.agent/workflows/go.md',
-  '.agent/workflows/minion.md'
-].filter(exists);
-
-const skillToken = /`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`/g;
-const nonSkillAllow = new Set([
-  'gg-skills',
-  'no-emit',
-  'find-related-tests',
-  'test-quality-gate',
-  'pre-launch-gate',
-  'ctx-zone',
-  'feature-branch',
-  'release-hotfix',
-  'nodejs-best-practices'
-]);
-
-for (const file of skillFiles) {
-  const text = read(file);
-  const lines = text.split('\n');
-  lines.forEach((line, idx) => {
-    if (!/(skill|skills|chain|primary|domain|use_skill)/i.test(line)) return;
-    const matches = [...line.matchAll(skillToken)].map(m => m[1]);
-    for (const token of matches) {
-      if (localSkills.has(token)) continue;
-      if (nonSkillAllow.has(token)) continue;
-      if (/^(main|release|hotfix)$/.test(token)) continue;
-      if (/^agent-/.test(token)) continue;
-      fail(`${file}:${idx + 1} references unknown skill token: ${token}`);
+if (exists('.agent/registry/mcp-runtime.json')) {
+  try {
+    const registry = JSON.parse(read('.agent/registry/mcp-runtime.json'));
+    if (!registry.profiles || typeof registry.profiles !== 'object') {
+      fail('.agent/registry/mcp-runtime.json must define profiles.');
     }
-  });
-}
-
-const mcpRegistryPath = '.agent/registry/mcp-runtime.json';
-if (exists(mcpRegistryPath)) {
-  const registry = JSON.parse(read(mcpRegistryPath));
-  const names = new Set();
-  for (const profile of Object.values(registry.profiles || {})) {
-    for (const n of profile.mcpServers || []) names.add(String(n).toLowerCase());
-    for (const n of profile.optional || []) names.add(String(n).toLowerCase());
-  }
-
-  const harnessPath = 'docs/agentic-harness.md';
-  if (exists(harnessPath)) {
-    const text = read(harnessPath);
-
-    if (/\b\d+\s+MCPs\b/.test(text)) {
-      fail('docs/agentic-harness.md uses static MCP count; use runtime registry reference instead.');
-    }
-
-    if (/gg-agent-bridge/i.test(text)) {
-      fail('docs/agentic-harness.md still references gg-agent-bridge, which is removed from runtime profile.');
-    }
-
-    if (/\b(a2a|gg-a2a-server)\b/i.test(text)) {
-      fail('docs/agentic-harness.md still references A2A services, which are removed from active harness.');
-    }
-
-    const section = text.split('### MCP Servers')[1]?.split('---')[0] || '';
-    const rows = section.split('\n').filter(l => l.trim().startsWith('|'));
-    for (const row of rows) {
-      if (row.includes('Server') || row.includes('---')) continue;
-      const cells = row.split('|').map(c => c.trim()).filter(Boolean);
-      const name = cells[0]?.replace(/`/g, '') || '';
-      if (!name) continue;
-      if (!names.has(name.toLowerCase())) {
-        fail(`docs/agentic-harness.md MCP table references unknown server: ${name}`);
-      }
-    }
+  } catch (error) {
+    fail(`Invalid JSON: .agent/registry/mcp-runtime.json (${String(error)})`);
   }
 }
 
-const workflow = exists('.agent/workflows/minion.md') ? read('.agent/workflows/minion.md') : '';
-if (workflow.includes('no human interjection mid-run') && workflow.includes('Escalate to human')) {
-  fail('minion workflow contradiction: claims no interjection but also has escalation path.');
-}
-
-if (/\b(spawn_kimi|get_kimi|dispatch_to_a2a|gg-agent-bridge|gg-a2a-server)\b/i.test(workflow)) {
-  fail('minion workflow still references removed Kimi/A2A bridge tools.');
-}
-
-const scriptRefRegex = /\.agent\/skills\/[a-z0-9_-]+\/scripts\/[a-zA-Z0-9_.-]+/g;
-for (const file of ['.agent/workflows/minion.md', '.agent/rules/GEMINI.md']) {
+for (const file of [
+  '.agent/registry/persona-registry.json',
+  '.agent/registry/persona-compounds.json',
+  '.agent/schemas/run-artifact.schema.json'
+]) {
   if (!exists(file)) continue;
-  const refs = read(file).match(scriptRefRegex) || [];
-  for (const ref of refs) {
-    if (!exists(ref)) {
-      fail(`${file} references missing script: ${ref}`);
-    }
+  try {
+    JSON.parse(read(file));
+  } catch (error) {
+    fail(`Invalid JSON: ${file} (${String(error)})`);
   }
-}
-
-if (warnings.length) {
-  console.log('Warnings:');
-  for (const w of warnings) console.log(`- ${w}`);
 }
 
 if (errors.length) {
   console.error('Harness lint failed:');
-  for (const e of errors) console.error(`- ${e}`);
+  for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }
 

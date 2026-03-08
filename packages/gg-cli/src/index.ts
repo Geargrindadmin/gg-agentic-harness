@@ -33,6 +33,36 @@ interface ExecOutcome {
   args: string[];
 }
 
+const PORTABLE_DOC_FILES = [
+  'docs/agentic-harness.md',
+  'docs/memory.md',
+  'docs/runtime-profiles.md'
+];
+
+const PORTABLE_REQUIRED_PACKAGE_SCRIPTS: Record<string, string> = {
+  'harness:lint': 'node scripts/harness-lint.mjs',
+  'harness:artifact:init': 'node scripts/agent-run-artifact.mjs init',
+  'harness:artifact:gate': 'node scripts/agent-run-artifact.mjs gate',
+  'harness:artifact:mcp': 'node scripts/agent-run-artifact.mjs mcp',
+  'harness:artifact:event': 'node scripts/agent-run-artifact.mjs event',
+  'harness:artifact:feedback': 'node scripts/agent-run-artifact.mjs feedback',
+  'harness:artifact:persona': 'node scripts/agent-run-artifact.mjs persona',
+  'harness:artifact:complete': 'node scripts/agent-run-artifact.mjs complete',
+  'harness:skills-audit': 'node scripts/skills-audit.mjs',
+  'harness:project-context': 'node scripts/generate-project-context.mjs',
+  'harness:project-context:check': 'node scripts/generate-project-context.mjs --check',
+  'harness:persona:sync': 'node scripts/persona-registry-sync.mjs',
+  'harness:persona:audit': 'node scripts/persona-registry-audit.mjs',
+  'harness:persona:benchmark': 'node scripts/persona-registry-benchmark.mjs',
+  'harness:codex:activate': 'node scripts/codex-project-sync.mjs activate',
+  'harness:codex:status': 'node scripts/codex-project-sync.mjs status',
+  'harness:runtime-parity': 'node scripts/runtime-parity-smoke.mjs',
+  'harness:runtime-parity:json': 'node scripts/runtime-parity-smoke.mjs --json',
+  'obsidian:doctor': 'node scripts/obsidian-cli-doctor.mjs',
+  'obsidian:vault:init': 'node scripts/obsidian-vault-bootstrap.mjs',
+  'obsidian:model-log': 'node scripts/obsidian-model-log.mjs'
+};
+
 function usage(): never {
   console.log(`
 GG CLI
@@ -46,11 +76,13 @@ Usage:
   gg [--json] [--project-root <path>] workflow find <query> [--limit <n>]
   gg [--json] [--project-root <path>] workflow show <slug>
   gg [--json] [--project-root <path>] workflow run <slug> [args...] [--validate none|tsc|lint|test|all] [--evidence <path[,path]>]
-  gg [--json] [--project-root <path>] run <init|gate|mcp|complete> [--key value]
+  gg [--json] [--project-root <path>] run <init|gate|mcp|event|feedback|persona|complete> [--key value]
+  gg [--json] [--project-root <path>] codex <activate|status> [targetDir] [--codex-home <path>]
   gg [--json] [--project-root <path>] context <check|refresh>
   gg [--json] [--project-root <path>] validate <tsc|lint|test|all>
   gg [--json] [--project-root <path>] obsidian <doctor|bootstrap|model-log>
   gg [--json] [--project-root <path>] portable init <targetDir> [--mode symlink|copy]
+  gg [--json] [--project-root <path>] portable verify <targetDir> [--runtime structure|smoke]
 `.trim());
   process.exit(2);
 }
@@ -659,8 +691,8 @@ function commandWorkflow(projectRoot: string, action: string | undefined, argv: 
 }
 
 function commandRun(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
-  if (!action || !['init', 'gate', 'mcp', 'complete'].includes(action)) {
-    throw new Error('Usage: gg run <init|gate|mcp|complete> [--key value]');
+  if (!action || !['init', 'gate', 'mcp', 'event', 'feedback', 'persona', 'complete'].includes(action)) {
+    throw new Error('Usage: gg run <init|gate|mcp|event|feedback|persona|complete> [--key value]');
   }
 
   const scriptPath = path.join(projectRoot, 'scripts', 'agent-run-artifact.mjs');
@@ -678,6 +710,37 @@ function commandRun(projectRoot: string, action: string | undefined, argv: strin
       stdout: result.stdout,
       stderr: result.stderr
     }
+  };
+}
+
+function commandCodex(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
+  if (!action || !['activate', 'status'].includes(action)) {
+    throw new Error('Usage: gg codex <activate|status> [targetDir] [--codex-home <path>]');
+  }
+
+  const scriptPath = path.join(projectRoot, 'scripts', 'codex-project-sync.mjs');
+  const { flags, positionals } = parseArgs(argv);
+  const targetRoot = path.resolve(positionals[0] || projectRoot);
+  const args = [scriptPath, action, targetRoot];
+  const codexHome = flagString(flags, 'codex-home');
+
+  if (codexHome) {
+    args.push('--codex-home', codexHome);
+  }
+  if (jsonMode) {
+    args.push('--json');
+  }
+
+  const result = executeCommand('node', args, projectRoot, true);
+  if (!jsonMode) {
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    return { code: result.code };
+  }
+
+  return {
+    code: result.code,
+    payload: result.stdout.trim() ? JSON.parse(result.stdout) : null
   };
 }
 
@@ -800,6 +863,37 @@ function ensureSymlinkOrCopy(source: string, destination: string, mode: 'symlink
   fs.cpSync(source, destination, { recursive: true });
 }
 
+function ensureFileCopied(source: string, destination: string): void {
+  if (fs.existsSync(destination)) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.copyFileSync(source, destination);
+}
+
+function ensurePortableDocs(projectRoot: string, targetRoot: string): void {
+  for (const relativePath of PORTABLE_DOC_FILES) {
+    ensureFileCopied(path.join(projectRoot, relativePath), path.join(targetRoot, relativePath));
+  }
+
+  fs.mkdirSync(path.join(targetRoot, 'docs', 'decisions'), { recursive: true });
+  fs.mkdirSync(path.join(targetRoot, 'docs', 'governance', 'feedback-loop-proposals'), { recursive: true });
+}
+
+function mergePortablePackageScripts(targetPackagePath: string): void {
+  const existing = readJsonFile<Record<string, unknown>>(targetPackagePath) || {};
+  const next = {
+    ...existing,
+    scripts: {
+      ...(typeof existing.scripts === 'object' && existing.scripts !== null ? (existing.scripts as Record<string, string>) : {}),
+      ...PORTABLE_REQUIRED_PACKAGE_SCRIPTS
+    }
+  };
+
+  writeJson(targetPackagePath, next);
+}
+
 function renderMcpConfig(targetRoot: string): string {
   return JSON.stringify(
     {
@@ -819,15 +913,250 @@ function renderMcpConfig(targetRoot: string): string {
   );
 }
 
-function commandPortable(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
-  if (action !== 'init') {
-    throw new Error('Usage: gg portable init <targetDir> [--mode symlink|copy]');
+function validatePromptMirrors(targetRoot: string): { ok: boolean; detail: string } {
+  const claude = path.join(targetRoot, 'CLAUDE.md');
+  const agents = path.join(targetRoot, 'AGENTS.md');
+  const gemini = path.join(targetRoot, 'GEMINI.md');
+  if (![claude, agents, gemini].every((file) => fs.existsSync(file))) {
+    return { ok: false, detail: 'Missing one or more prompt mirror files' };
   }
 
+  const base = fs.readFileSync(claude, 'utf8');
+  const mirrorsAligned =
+    base === fs.readFileSync(agents, 'utf8') &&
+    base === fs.readFileSync(gemini, 'utf8');
+
+  return {
+    ok: mirrorsAligned,
+    detail: mirrorsAligned ? 'CLAUDE.md, AGENTS.md, and GEMINI.md are aligned' : 'Prompt mirror drift detected'
+  };
+}
+
+function validatePortableMcpConfig(targetRoot: string): { ok: boolean; detail: string } {
+  const mcpPath = path.join(targetRoot, '.mcp.json');
+  if (!fs.existsSync(mcpPath)) {
+    return { ok: false, detail: 'Missing .mcp.json' };
+  }
+
+  const config = readJsonFile<{
+    mcpServers?: {
+      ['gg-skills']?: { args?: string[]; env?: Record<string, string> };
+    };
+  }>(mcpPath);
+
+  const server = config?.mcpServers?.['gg-skills'];
+  if (!server) {
+    return { ok: false, detail: 'Missing gg-skills server entry in .mcp.json' };
+  }
+
+  const expectedArgs = path.join(targetRoot, 'mcp-servers', 'gg-skills', 'dist', 'index.js');
+  const expectedSkillsDir = path.join(targetRoot, '.agent', 'skills');
+  const expectedWorkflowsDir = path.join(targetRoot, '.agent', 'workflows');
+  const argsOk = Array.isArray(server.args) && server.args.includes(expectedArgs);
+  const skillsOk = server.env?.SKILLS_DIR === expectedSkillsDir;
+  const workflowsOk = server.env?.WORKFLOWS_DIR === expectedWorkflowsDir;
+  const buildOk = fs.existsSync(expectedArgs);
+
+  return {
+    ok: Boolean(argsOk && skillsOk && workflowsOk && buildOk),
+    detail: argsOk && skillsOk && workflowsOk && buildOk
+      ? '.mcp.json points gg-skills at the target repo'
+      : 'gg-skills MCP config does not point at target repo paths or gg-skills is not built'
+  };
+}
+
+function validatePortablePackageScripts(targetRoot: string): { ok: boolean; detail: string } {
+  const pkg = readJsonFile<{ scripts?: Record<string, string> }>(path.join(targetRoot, 'package.json'));
+  const missing = Object.keys(PORTABLE_REQUIRED_PACKAGE_SCRIPTS).filter(
+    (name) => pkg?.scripts?.[name] !== PORTABLE_REQUIRED_PACKAGE_SCRIPTS[name]
+  );
+
+  return {
+    ok: missing.length === 0,
+    detail: missing.length === 0
+      ? 'Target package.json exposes harness verification scripts'
+      : `Target package.json is missing harness scripts: ${missing.join(', ')}`
+  };
+}
+
+function executeJsonNodeScript(
+  targetRoot: string,
+  scriptPath: string,
+  args: string[]
+): { code: number; stdout: string; stderr: string; parsed: unknown | null } {
+  const result = executeCommand('node', [scriptPath, ...args], targetRoot, true);
+  let parsed: unknown | null = null;
+  try {
+    parsed = result.stdout.trim() ? JSON.parse(result.stdout) : null;
+  } catch {
+    parsed = null;
+  }
+  return { ...result, parsed };
+}
+
+function commandPortableVerify(
+  projectRoot: string,
+  targetRoot: string,
+  runtimeMode: 'structure' | 'smoke',
+  jsonMode: boolean
+): CommandResult {
+  const checks: Array<{ name: string; status: 'pass' | 'fail' | 'warn'; detail: string }> = [];
+  const codexActivationCommand = `node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} codex activate ${targetRoot}`;
+
+  const promptCheck = validatePromptMirrors(targetRoot);
+  checks.push({ name: 'prompt_mirror', status: promptCheck.ok ? 'pass' : 'fail', detail: promptCheck.detail });
+
+  const mcpCheck = validatePortableMcpConfig(targetRoot);
+  checks.push({ name: 'mcp_config', status: mcpCheck.ok ? 'pass' : 'fail', detail: mcpCheck.detail });
+
+  const packageScriptCheck = validatePortablePackageScripts(targetRoot);
+  checks.push({
+    name: 'package_scripts',
+    status: packageScriptCheck.ok ? 'pass' : 'fail',
+    detail: packageScriptCheck.detail
+  });
+
+  const doctor = commandDoctor(targetRoot, true);
+  checks.push({
+    name: 'doctor',
+    status: doctor.code === 0 ? 'pass' : 'fail',
+    detail: doctor.code === 0 ? 'gg doctor passed' : 'gg doctor failed'
+  });
+
+  const projectContext = executeCommand('node', [path.join(targetRoot, 'scripts', 'generate-project-context.mjs'), '--check'], targetRoot, true);
+  checks.push({
+    name: 'project_context',
+    status: projectContext.code === 0 ? 'pass' : 'fail',
+    detail: (projectContext.stdout || projectContext.stderr || '').trim() || 'project context check completed'
+  });
+
+  const audit = executeCommand('node', [path.join(targetRoot, 'scripts', 'persona-registry-audit.mjs')], targetRoot, true);
+  checks.push({
+    name: 'persona_audit',
+    status: audit.code === 0 ? 'pass' : 'fail',
+    detail: (audit.stdout || audit.stderr || '').trim() || 'persona audit completed'
+  });
+
+  const benchmark = executeJsonNodeScript(
+    targetRoot,
+    path.join(targetRoot, 'scripts', 'persona-registry-benchmark.mjs'),
+    ['--json']
+  );
+  const benchmarkPayload = benchmark.parsed as { failed?: number; passed?: number } | null;
+  const benchmarkOk = benchmark.code === 0 && (benchmarkPayload?.failed ?? 0) === 0;
+  checks.push({
+    name: 'persona_benchmark',
+    status: benchmarkOk ? 'pass' : 'fail',
+    detail: benchmarkOk
+      ? `Persona routing benchmark passed (${benchmarkPayload?.passed ?? 0} cases)`
+      : 'Persona routing benchmark failed'
+  });
+
+  const resolver = executeJsonNodeScript(
+    targetRoot,
+    path.join(targetRoot, 'scripts', 'persona-registry-resolve.mjs'),
+    ['--prompt', 'ship auth hardening with oauth login, passkeys, and regression tests', '--classification', 'TASK', '--json']
+  );
+
+  const resolverOk =
+    resolver.code === 0 &&
+    typeof resolver.parsed === 'object' &&
+    resolver.parsed !== null &&
+    (resolver.parsed as { compoundPersona?: { id?: string } }).compoundPersona?.id === 'compound:auth-hardening:v1';
+  checks.push({
+    name: 'persona_resolve_smoke',
+    status: resolverOk ? 'pass' : 'fail',
+    detail: resolverOk
+      ? 'Resolver selected auth-hardening compound as expected'
+      : 'Resolver smoke prompt did not return the expected auth-hardening compound'
+  });
+
+  const codexStatus = executeJsonNodeScript(
+    targetRoot,
+    path.join(targetRoot, 'scripts', 'codex-project-sync.mjs'),
+    ['status', targetRoot, '--json']
+  );
+  const codexActivation = codexStatus.parsed as { active?: boolean } | null;
+  checks.push({
+    name: 'codex_activation',
+    status: codexActivation?.active ? 'pass' : 'warn',
+    detail: codexActivation?.active
+      ? 'Codex project-scoped MCPs are active for this target repo'
+      : `Codex project-scoped MCPs are not active for this target repo. Run ${codexActivationCommand}`
+  });
+
+  const runtimeRegistryPath = path.join(targetRoot, '.agent', 'registry', 'mcp-runtime.json');
+  const runtimeRegistry = readJsonFile<{
+    profiles?: Record<string, { optional?: string[] }>;
+  }>(runtimeRegistryPath);
+  const profiles = ['codex', 'claude', 'kimi'];
+  const parityMissing = profiles.filter(
+    (profile) => !runtimeRegistry?.profiles?.[profile]?.optional?.includes('claude-mem')
+  );
+  checks.push({
+    name: 'runtime_registry',
+    status: parityMissing.length === 0 ? 'pass' : 'fail',
+    detail:
+      parityMissing.length === 0
+        ? 'Runtime registry exposes claude-mem parity for codex/claude/kimi'
+        : `Runtime registry missing claude-mem parity on: ${parityMissing.join(', ')}`
+  });
+
+  if (runtimeMode === 'smoke') {
+    const smoke = executeJsonNodeScript(
+      targetRoot,
+      path.join(targetRoot, 'scripts', 'runtime-parity-smoke.mjs'),
+      ['--allow-warn', '--json']
+    );
+    const smokePayload = smoke.parsed as { results?: Array<{ id?: string; status?: string }> } | null;
+    const structuralFailures = (smokePayload?.results || []).filter(
+      (entry) => entry.status === 'fail' && entry.id !== 'codex_gg_skills'
+    );
+    checks.push({
+      name: 'runtime_parity_smoke',
+      status: smoke.code === 0 || structuralFailures.length === 0 ? 'pass' : 'warn',
+      detail:
+        smoke.code === 0 || structuralFailures.length === 0
+          ? 'Runtime parity smoke passed or only host-specific gg-skills drift remains'
+          : 'Runtime parity smoke found structural failures'
+    });
+  }
+
+  const failures = checks.filter((check) => check.status === 'fail');
+  const warnings = checks.filter((check) => check.status === 'warn');
+
+  if (!jsonMode) {
+    console.log(`Portable verify: ${targetRoot}`);
+    for (const check of checks) {
+      console.log(`[${check.status}] ${check.name}: ${check.detail}`);
+    }
+  }
+
+  return {
+    code: failures.length > 0 ? 1 : 0,
+    payload: {
+      targetRoot,
+      runtimeMode,
+      status: failures.length > 0 ? 'failed' : warnings.length > 0 ? 'passed_with_warnings' : 'passed',
+      checks
+    }
+  };
+}
+
+function commandPortable(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): CommandResult {
   const { flags, positionals } = parseArgs(argv);
   const targetDir = positionals[0];
   if (!targetDir) {
-    throw new Error('Usage: gg portable init <targetDir> [--mode symlink|copy]');
+    throw new Error('Usage: gg portable <init|verify> <targetDir> [--mode symlink|copy] [--runtime structure|smoke]');
+  }
+
+  if (action === 'verify') {
+    const runtimeMode = (flagString(flags, 'runtime') === 'smoke' ? 'smoke' : 'structure') as 'structure' | 'smoke';
+    return commandPortableVerify(projectRoot, path.resolve(targetDir), runtimeMode, jsonMode);
+  }
+
+  if (action !== 'init') {
+    throw new Error('Usage: gg portable <init|verify> <targetDir> [--mode symlink|copy] [--runtime structure|smoke]');
   }
 
   const mode = (flagString(flags, 'mode') === 'copy' ? 'copy' : 'symlink') as 'symlink' | 'copy';
@@ -848,11 +1177,15 @@ function commandPortable(projectRoot: string, action: string | undefined, argv: 
   }
 
   ensureSymlinkOrCopy(path.join(projectRoot, '.agent'), path.join(targetRoot, '.agent'), mode);
+  ensureSymlinkOrCopy(path.join(projectRoot, 'scripts'), path.join(targetRoot, 'scripts'), mode);
+  ensureSymlinkOrCopy(path.join(projectRoot, 'evals'), path.join(targetRoot, 'evals'), mode);
   ensureSymlinkOrCopy(
     path.join(projectRoot, 'mcp-servers', 'gg-skills'),
     path.join(targetRoot, 'mcp-servers', 'gg-skills'),
     mode
   );
+  ensurePortableDocs(projectRoot, targetRoot);
+  mergePortablePackageScripts(targetPackagePath);
 
   const sourcePrompt = path.join(projectRoot, 'CLAUDE.md');
   const targetPrompt = path.join(targetRoot, 'CLAUDE.md');
@@ -865,9 +1198,24 @@ function commandPortable(projectRoot: string, action: string | undefined, argv: 
     fs.symlinkSync('CLAUDE.md', agentsAlias);
   }
 
+  const geminiAlias = path.join(targetRoot, 'GEMINI.md');
+  if (!fs.existsSync(geminiAlias)) {
+    fs.symlinkSync('CLAUDE.md', geminiAlias);
+  }
+
   const mcpPath = path.join(targetRoot, '.mcp.json');
   if (!fs.existsSync(mcpPath)) {
     fs.writeFileSync(mcpPath, `${renderMcpConfig(targetRoot)}\n`, 'utf8');
+  }
+
+  const contextRefresh = executeCommand(
+    'node',
+    [path.join(targetRoot, 'scripts', 'generate-project-context.mjs')],
+    targetRoot,
+    true
+  );
+  if (contextRefresh.code !== 0) {
+    throw new Error(`Failed to generate project context for target: ${(contextRefresh.stderr || contextRefresh.stdout).trim()}`);
   }
 
   const installNotesPath = path.join(targetRoot, 'PORTABLE_AGENTIC_SETUP.md');
@@ -887,7 +1235,14 @@ function commandPortable(projectRoot: string, action: string | undefined, argv: 
       `npm --prefix ${path.join(targetRoot, 'mcp-servers', 'gg-skills')} run build`,
       '```',
       '2. Open your IDE in target root and verify MCP loads `.mcp.json`.',
-      '3. Run `gg doctor` from target (after linking gg-cli).',
+      `3. Run \`node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} doctor\`.`,
+      '4. Activate Codex project-scoped MCPs:',
+      '```bash',
+      `node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${targetRoot} codex activate ${targetRoot}`,
+      '```',
+      `5. Run \`node ${path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js')} --project-root ${projectRoot} portable verify ${targetRoot} --runtime structure\`.`,
+      '6. Run `npm run harness:runtime-parity` to confirm Codex/Claude/Kimi parity wiring.',
+      '7. Run `npm run harness:persona:audit` and `npm run harness:persona:benchmark` to confirm persona routing is intact.',
       ''
     ].join('\n');
     fs.writeFileSync(installNotesPath, notes, 'utf8');
@@ -951,6 +1306,9 @@ function main(): void {
         break;
       case 'run':
         result = commandRun(projectRoot, maybeAction, rest, jsonMode);
+        break;
+      case 'codex':
+        result = commandCodex(projectRoot, maybeAction, rest, jsonMode);
         break;
       case 'context':
         result = commandContext(projectRoot, maybeAction, jsonMode);

@@ -16,6 +16,7 @@ The harness currently requires manual setup across files, scripts, and MCP wirin
 2. Share one logic layer for catalog/discovery between agent tooling and CLI tooling.
 3. Provide a portable bootstrap flow for installing the harness into new projects.
 4. Reduce setup time and improve consistency across repositories.
+5. Install the same persona-routing and runtime-parity contract in every new project.
 
 ## 3. Scope
 
@@ -57,6 +58,7 @@ The harness currently requires manual setup across files, scripts, and MCP wirin
 5. `gg validate` must run deterministic quality gates (`tsc`, `lint`, `test`).
 6. `gg obsidian` must proxy to existing Obsidian scripts.
 7. `gg portable init` must create a runnable target layout and `.mcp.json` wiring.
+8. Portable installs must include generic persona files, persona registries, and artifact support for persona routing.
 
 ## 6. Non-Functional Requirements
 
@@ -64,6 +66,7 @@ The harness currently requires manual setup across files, scripts, and MCP wirin
 2. No hard dependency on active MCP session for CLI execution.
 3. Deterministic exit codes for CI integration.
 4. Human-readable output suitable for shell logs.
+5. Portable installs must preserve Codex/Claude/Kimi parity semantics for memory, persona dispatch, and feedback loops.
 
 ## 7. Architecture
 
@@ -86,6 +89,7 @@ The harness currently requires manual setup across files, scripts, and MCP wirin
 5. `gg workflow run symphony-lite <task> --validate <mode>` returns terminal outcome.
 6. `gg portable init` creates target harness files and notes.
 7. README and governance docs are updated with command and policy guidance.
+8. Portable init output includes runtime parity and persona audit verification steps.
 
 ## 9. Rollout Plan
 

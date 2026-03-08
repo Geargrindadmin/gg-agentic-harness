@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "updated": "2026-03-08",
+  "cases": [
+    {
+      "id": "registry-auth-hardening",
+      "prompt": "ship auth hardening with oauth login, passkeys, and regression tests",
+      "classification": "TASK",
+      "expected": {
+        "compoundRequired": true,
+        "compoundId": "compound:auth-hardening:v1",
+        "compoundSource": "registry",
+        "primaryPersonaId": "orchestrator",
+        "dispatchPlan": "coordinator-plus-specialists",
+        "boardRequired": true,
+        "collaboratorIncludes": [
+          "backend-specialist",
+          "security-auditor",
+          "test-engineer"
+        ],
+        "highRiskTermsIncludes": [
+          "auth",
+          "oauth"
+        ]
+      }
+    },
+    {
+      "id": "registry-payment-reliability",
+      "prompt": "stabilize stripe refunds, invoice retries, and escrow ledger reconciliation before launch",
+      "classification": "TASK",
+      "expected": {
+        "compoundRequired": true,
+        "compoundId": "compound:payment-reliability:v1",
+        "compoundSource": "registry",
+        "primaryPersonaId": "orchestrator",
+        "dispatchPlan": "coordinator-plus-specialists",
+        "boardRequired": true,
+        "collaboratorIncludes": [
+          "backend-specialist",
+          "database-architect",
+          "security-auditor"
+        ],
+        "highRiskTermsIncludes": [
+          "invoice",
+          "escrow"
+        ]
+      }
+    },
+    {
+      "id": "registry-incident-hardening",
+      "prompt": "production rollback keeps failing after deploy; triage the outage, validate runbooks, and add recovery tests",
+      "classification": "CRITICAL",
+      "expected": {
+        "compoundRequired": true,
+        "compoundId": "compound:incident-hardening:v1",
+        "compoundSource": "registry",
+        "primaryPersonaId": "orchestrator",
+        "dispatchPlan": "coordinator-plus-specialists",
+        "boardRequired": true,
+        "collaboratorIncludes": [
+          "debugger",
+          "devops-engineer",
+          "test-engineer"
+        ],
+        "highRiskTermsIncludes": [
+          "production",
+          "rollback"
+        ]
+      }
+    },
+    {
+      "id": "registry-docs-governance",
+      "prompt": "document the installable harness policy, ADR flow, and workflow contract for new projects",
+      "classification": "DECISION",
+      "expected": {
+        "compoundRequired": true,
+        "compoundId": "compound:docs-governance:v1",
+        "compoundSource": "registry",
+        "primaryPersonaId": "project-planner",
+        "dispatchPlan": "specialist-team",
+        "boardRequired": false,
+        "collaboratorIncludes": [
+          "documentation-writer",
+          "product-manager"
+        ]
+      }
+    },
+    {
+      "id": "runtime-performance-qa",
+      "prompt": "optimize dashboard rendering, lazy loading, and browser performance regressions with e2e coverage",
+      "classification": "TASK",
+      "expected": {
+        "compoundRequired": true,
+        "compoundIdPrefix": "compound:runtime:",
+        "compoundSource": "runtime",
+        "primaryPersonaId": "orchestrator",
+        "dispatchPlan": "coordinator-plus-specialists",
+        "boardRequired": false,
+        "collaboratorIncludes": [
+          "performance-optimizer",
+          "qa-automation-engineer",
+          "test-engineer"
+        ]
+      }
+    },
+    {
+      "id": "single-front-end-no-compound",
+      "prompt": "build a marketing landing page with bold typography, motion, and responsive polish",
+      "classification": "TASK",
+      "expected": {
+        "compoundRequired": false,
+        "primaryPersonaId": "orchestrator",
+        "dispatchPlan": "coordinator-plus-specialists",
+        "boardRequired": false,
+        "collaboratorIncludes": [
+          "frontend-specialist"
+        ]
+      }
+    }
+  ]
+}

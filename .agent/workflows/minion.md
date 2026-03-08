@@ -36,9 +36,10 @@ user_invocable: true
 Select runtime profile from `docs/runtime-profiles.md`, then use the profile-specific memory path:
 
 1. `claude` profile primary: `search -> timeline -> get_observations`
-2. `codex` profile primary: `search_nodes -> open_nodes`
-3. `kimi` profile primary: `search_nodes -> open_nodes`
-4. If neither memory path is available, continue and log the gap in run artifact (`mcpCalls` with `status=skipped`)
+2. `codex` profile primary: `search -> timeline -> get_observations`
+3. `kimi` profile primary: `search -> timeline -> get_observations`
+4. If query tools are unavailable, fall back to `search_nodes -> open_nodes`
+5. If neither memory path is available, continue and log the gap in run artifact (`mcpCalls` with `status=skipped`)
 
 For `TASK|TASK_LITE|DECISION`, apply `.agent/rules/remote-task-tracking.md`:
 
@@ -95,7 +96,9 @@ Parse `$ARGUMENTS` to determine:
 Set up isolated execution environment:
 
 0. **Initialize run artifact:** `node scripts/agent-run-artifact.mjs init --id {bead-id} --runtime {codex|claude|kimi} --classification TASK`
-0.1 **Upsert remote task (open):** `node scripts/gws-task.mjs sync-run --tasklist "$GWS_TASKLIST_ID" --run-id {bead-id} --title "{task}" --status open`
+0.1 **Resolve persona routing:** `node scripts/persona-registry-resolve.mjs --prompt "$ARGUMENTS" --classification TASK --json > .agent/runs/{bead-id}.persona-routing.json`
+0.2 **Record persona routing:** `node scripts/agent-run-artifact.mjs persona --id {bead-id} --resolution-file .agent/runs/{bead-id}.persona-routing.json`
+0.3 **Upsert remote task (open):** `node scripts/gws-task.mjs sync-run --tasklist "$GWS_TASKLIST_ID" --run-id {bead-id} --title "{task}" --status open`
 1. **Create bead:** `bd create "{task}" --description="{full context}" -t {type} -p {priority} --json`
 2. **Claim bead:** `bd update <id> --claim --json`
 3. **Create worktree** (for complex/large tasks):
@@ -118,18 +121,26 @@ Boot the conductor and load context:
 
 1. **Load harness config:** Read `docs/agentic-harness.md` for node responsibilities and role matrix.
 2. **Load context** via `context-loader` skill — subdirectory-scoped only, NOT the full codebase.
-3. **Run Board of Directors** (if required per NODE 1 gate):
+3. **Audit persona registry:** `node scripts/persona-registry-audit.mjs`
+4. **Resolve personas for this task:** `node scripts/persona-registry-resolve.mjs --prompt "$ARGUMENTS" --classification TASK --json`
+   - Use the resolved `primaryPersona` as the first dispatch owner
+   - Use only the resolved collaborator personas for initial fanout
+   - If `compoundPersona` is present, its primary and collaborator set replace the base routing plan
+   - If confidence is low, keep the coordinator in control of all dispatch decisions
+   - If persona creation is suggested, stop and follow `.agent/rules/persona-dispatch-governance.md`
+   - If a runtime compound returns `promoteCompoundSuggested=true`, log a hardening follow-up to register it
+5. **Run Board of Directors** (if required per NODE 1 gate or resolver output):
    - Invoke `/board-meeting {task description}` with full context
    - All Board directives MUST be written to the task plan before proceeding
    - Board votes 5-0 required for HIGH risk tasks (any dissent → escalate to human)
-4. **Assign agent roles:**
+6. **Assign agent roles:**
    - Scout: reads codebase, surfaces questions
    - Planner: writes task scope + acceptance criteria
    - Builder: writes code
    - Reviewer: runs tests + linting
    - Coordinator: this agent (claims files, serializes writes, resolves conflicts)
 
-5. **Parallelism Mode Detection:**
+7. **Parallelism Mode Detection:**
 
    Read `.agent-mode` (written by `setup.sh`) to determine the parallelism strategy:
 

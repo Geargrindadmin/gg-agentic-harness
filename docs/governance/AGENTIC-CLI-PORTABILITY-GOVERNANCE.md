@@ -32,6 +32,7 @@
 4. Portable setup output must generate machine-readable config (`.mcp.json`) and human setup notes.
 5. All command groups must support `--json` output for CI/automation use.
 6. Workflow adapters must emit explicit terminal status and persistent run evidence.
+7. Portable installs must ship persona routing files (`.agent/agents`, `.agent/registry/persona-registry.json`, `.agent/registry/persona-compounds.json`) together with artifact support.
 
 ## 4. Change Management
 
@@ -48,6 +49,7 @@
 2. `gg doctor` passes in source repo.
 3. `gg portable init` smoke test passes in temp directory.
 4. Harness lint and skills audit pass after CLI changes.
+5. Persona audit and runtime parity smoke pass in a freshly initialized target project.
 
 ## 6. Security Requirements
 
@@ -59,6 +61,7 @@
 
 - Runs and gates must continue to use `.agent/runs/*.json` evidence where applicable.
 - CLI-generated portability actions must leave a `PORTABLE_AGENTIC_SETUP.md` trail in target repos.
+- Persona routing must remain auditable through `personaRouting` entries in run artifacts when portable installs dispatch specialists.
 
 ## 8. References
 

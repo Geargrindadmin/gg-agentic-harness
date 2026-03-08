@@ -18,7 +18,7 @@
 | 4   | Blueprint Engine            | Blueprint              | 5-Cycle Engine + Evaluate-Loop                                                          |
 | 5   | Rules / Context             | Rules files            | `GEMINI.md`, `CLAUDE.md`, `.agent/rules/*.md`, `docs/project-context.md`                 |
 | 5.5 | Memory Layer                | Session Observation DB | `claude-mem` + SQLite + Chroma + 4 MCP tools (`search`, `timeline`, `get_observations`) |
-| 6   | Tool Shed                   | MCP Tool Shed          | Skills + runtime-profile MCP set + workflows + `intelligent-routing` + `kit/`            |
+| 6   | Tool Shed                   | MCP Tool Shed          | Skills + runtime-profile MCP set + workflows + persona registry + compound registry + `kit/` |
 | 7   | Validation Layer            | CI + 3M tests          | `/test-quality-gate`, adversarial review rule, `.husky/pre-push`, GitHub Actions        |
 | 8   | PR Review                   | GitHub PRs             | `bd close → bd sync → git push → gh pr create`                                          |
 
@@ -29,9 +29,9 @@
 | Role            | Files   | Write              | Commit | Push               |
 | --------------- | ------- | ------------------ | ------ | ------------------ |
 | **Scout**       | ✅ Read | ❌                 | ❌     | ❌                 |
-| **Planner**     | ✅ Read | ✅ docs/plans only | ❌     | ❌                 |
+| **Planner**     | ✅ Read | ✅ docs/plans/PRD/governance only | ❌     | ❌                 |
 | **Builder**     | ✅ Read | ✅                 | ✅     | ❌                 |
-| **Reviewer**    | ✅ Read | ✅ comments only   | ❌     | ❌                 |
+| **Reviewer**    | ✅ Read | ✅ tests/snapshots/review artifacts only | ❌     | ❌                 |
 | **Coordinator** | ✅ Read | ✅                 | ✅     | ✅ feature/\* only |
 
 **File-Claim Protocol:**
@@ -64,7 +64,7 @@
 | Deploy/CI       | `deployment-procedures`                                       | `deployment-procedures → verification-before-completion`          |
 | Debugging       | `systematic-debugging`                                        | —                                                                 |
 | Memory          | `context-loader`, `claude-mem`                                | `search → timeline → get_observations` (fallback: `search_nodes → open_nodes`) |
-| Meta            | `board-of-directors`, `intelligent-routing`, `context-loader` | —                                                                 |
+| Meta            | `board-of-directors`, `context-loader`, persona registry | —                                                                 |
 
 ### MCP Servers
 
@@ -95,6 +95,12 @@ Source of truth: `.agent/registry/mcp-runtime.json` (profile-specific and machin
 | exa | Web/code search context | 6 |
 | google-maps-platform-code-assist | Maps platform docs/tools | 6 |
 | ide | Utility/debug helper tools | 6 |
+
+Codex-specific rule:
+
+1. `gg-skills` and `filesystem` are repo-scoped MCPs.
+2. Before a Codex session in a new repo, run `npm run harness:codex:activate`.
+3. `npm run harness:runtime-parity` may warn if activation has not been applied on the current machine, but the local repo install can still be structurally correct.
 
 ---
 
@@ -243,7 +249,8 @@ Minimum required evidence:
 3. MCP smoke/tool calls executed
 4. Validation gates with command, exit code, attempt count
 5. Remote task sync status (`gws-task.mjs`) or explicit skip reason
-6. Final status (`success` or `failed`) and rollback details if applicable
+6. Persona routing evidence (`personaRouting`) including compound persona when present
+7. Final status (`success` or `failed`) and rollback details if applicable
 
 ---
 
@@ -266,7 +273,10 @@ AGENT_MODE=$(cat .agent-mode 2>/dev/null || echo "antigravity")
 
 ### Hard Rules (both modes)
 
-- `auth`, `payments`, `escrow`, `KYC`: Claude handles directly
+- `auth`, `payments`, `escrow`, `KYC`: active runtime handles directly, but board approval and reviewer evidence are mandatory
+- Persona registry and compound registry govern all specialist dispatch: run `node scripts/persona-registry-audit.mjs` and `node scripts/persona-registry-resolve.mjs --prompt "<task>" --classification <...> --json` before fanout
+- If routing confidence is low, keep orchestration under the coordinator; if `createPersonaSuggested=true`, follow `.agent/rules/persona-dispatch-governance.md`
+- If resolver returns `compoundPersona`, use that compound's primary/collaborators as the effective dispatch contract and record it in the run artifact
 - Workers never push — always emit `HANDOFF_READY`, coordinator reviews + pushes
 - File-Claim Protocol active at all levels
 
@@ -277,14 +287,18 @@ AGENT_MODE=$(cat .agent-mode 2>/dev/null || echo "antigravity")
 ### Start
 
 - [ ] `bd prime --json` — no orphaned beads
+- [ ] `npm run harness:runtime-parity` — Codex/Claude/Kimi parity intact
 - [ ] Select runtime profile from `docs/runtime-profiles.md` (`codex`, `claude`, or `kimi`)
 - [ ] Prime memory according to selected profile (`docs/memory.md`)
 - [ ] Ensure context file is current: `npm run harness:project-context:check` (or regenerate)
+- [ ] Audit persona registry: `npm run harness:persona:audit`
+- [ ] Resolve approved personas for the task: `node scripts/persona-registry-resolve.mjs --prompt "<task>" --classification <...> --json > .agent/runs/<run-id>.persona-routing.json`
 - [ ] If configured, list remote tasks: `node scripts/gws-task.mjs list --tasklist "$GWS_TASKLIST_ID"`
 - [ ] Classify request (SIMPLE / TASK / DECISION / CRITICAL)
 - [ ] If TASK: `bd create` → `bd update --claim`
 - [ ] Load `agentic-harness.md` and `context-loader` skill
 - [ ] Initialize run artifact: `node scripts/agent-run-artifact.mjs init --id <run-id> --runtime <codex|claude|kimi> --classification <...>`
+- [ ] Record persona routing in the artifact: `node scripts/agent-run-artifact.mjs persona --id <run-id> --resolution-file .agent/runs/<run-id>.persona-routing.json`
 - [ ] For `TASK|TASK_LITE|DECISION`, upsert remote task open status via `.agent/rules/remote-task-tracking.md`
 
 ### During

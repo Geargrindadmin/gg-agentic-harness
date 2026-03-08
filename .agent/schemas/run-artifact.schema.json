@@ -27,6 +27,11 @@
       "enum": ["SIMPLE", "TASK", "TASK_LITE", "DECISION", "CRITICAL"]
     },
     "taskSummary": { "type": "string" },
+    "promptVersion": { "type": "string", "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "workflowVersion": { "type": "string", "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "blueprintVersion": { "type": "string", "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "toolBundle": { "type": "string" },
+    "riskTier": { "type": "string", "enum": ["", "low", "medium", "high"] },
     "selectedSkills": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
@@ -53,9 +58,28 @@
         "required": ["name", "command", "exitCode", "attempt", "timestamp"],
         "properties": {
           "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["pass", "fail", "skipped"] },
           "command": { "type": "string" },
           "exitCode": { "type": "integer" },
           "attempt": { "type": "integer", "minimum": 1 },
+          "detail": { "type": "string" },
+          "signature": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["eventType", "summary", "status", "timestamp"],
+        "properties": {
+          "eventType": { "type": "string" },
+          "summary": { "type": "string" },
+          "status": { "type": "string", "enum": ["info", "pass", "fail", "blocked"] },
+          "detail": { "type": "string" },
+          "target": { "type": "string" },
           "timestamp": { "type": "string", "format": "date-time" }
         },
         "additionalProperties": false
@@ -73,12 +97,160 @@
         "additionalProperties": false
       }
     },
+    "failureSignatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["signature", "gate", "count", "firstSeenAt", "lastSeenAt"],
+        "properties": {
+          "signature": { "type": "string", "minLength": 1 },
+          "gate": { "type": "string", "minLength": 1 },
+          "count": { "type": "integer", "minimum": 1 },
+          "firstSeenAt": { "type": "string", "format": "date-time" },
+          "lastSeenAt": { "type": "string", "format": "date-time" },
+          "lastCommand": { "type": "string" },
+          "lastDetail": { "type": "string" },
+          "lastExitCode": { "type": "integer" },
+          "failureCode": { "type": "string" },
+          "failurePath": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "feedbackLoops": {
+      "type": "object",
+      "properties": {
+        "internal": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/feedbackEntry"
+          }
+        },
+        "external": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/feedbackEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "personaRouting": {
+      "type": ["object", "null"],
+      "required": [
+        "routingConfidence",
+        "dispatchPlan",
+        "boardRequired",
+        "highRiskTerms",
+        "createPersonaSuggested",
+        "promoteCompoundSuggested",
+        "primaryPersonaId",
+        "collaboratorPersonaIds",
+        "matchedPersonaIds",
+        "compoundPersona",
+        "recordedAt"
+      ],
+      "properties": {
+        "routingConfidence": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"]
+        },
+        "dispatchPlan": { "type": "string" },
+        "boardRequired": { "type": "boolean" },
+        "highRiskTerms": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "createPersonaSuggested": { "type": "boolean" },
+        "promoteCompoundSuggested": { "type": "boolean" },
+        "primaryPersonaId": { "type": "string" },
+        "collaboratorPersonaIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "matchedPersonaIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "compoundPersona": {
+          "type": ["object", "null"],
+          "required": [
+            "id",
+            "source",
+            "riskTier",
+            "dispatchPlan",
+            "primaryPersonaId",
+            "collaboratorPersonaIds",
+            "memberPersonaIds",
+            "memoryQuery",
+            "summary",
+            "reasons",
+            "score",
+            "promoteSuggested",
+            "signature"
+          ],
+          "properties": {
+            "id": { "type": "string" },
+            "source": { "type": "string", "enum": ["registry", "runtime", ""] },
+            "riskTier": { "type": "string", "enum": ["low", "medium", "high", ""] },
+            "dispatchPlan": { "type": "string" },
+            "primaryPersonaId": { "type": "string" },
+            "collaboratorPersonaIds": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "memberPersonaIds": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "memoryQuery": { "type": "string" },
+            "summary": { "type": "string" },
+            "reasons": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "score": { "type": ["integer", "number", "null"] },
+            "promoteSuggested": { "type": "boolean" },
+            "signature": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "recordedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
     "rollback": {
       "type": ["object", "null"],
       "properties": {
         "trigger": { "type": "string" },
         "executed": { "type": "boolean" },
         "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "feedbackEntry": {
+      "type": "object",
+      "required": ["kind", "status", "summary", "timestamp"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["info", "triggered", "accepted", "skipped", "pass", "fail", "blocked"]
+        },
+        "summary": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string" },
+        "target": { "type": "string" },
+        "trigger": { "type": "string" },
+        "proposalPath": { "type": "string" },
+        "signature": { "type": "string" },
+        "sourceRuns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "gate": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
       },
       "additionalProperties": false
     }

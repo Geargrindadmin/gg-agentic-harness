@@ -13,14 +13,14 @@ priority: T1
 | Role | Read Files | Write Files | Execute Commands | Git Commit | Git Push |
 |------|:----------:|:-----------:|:----------------:|:----------:|:--------:|
 | **Scout** | ✅ | ❌ | ❌ (read-only cmds) | ❌ | ❌ |
-| **Planner** | ✅ | ✅ (docs/plans only) | ❌ | ❌ | ❌ |
+| **Planner** | ✅ | ✅ (docs, plans, PRDs, governance artifacts) | ❌ | ❌ | ❌ |
 | **Builder** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Reviewer** | ✅ | ✅ (comments only) | ✅ (tests only) | ❌ | ❌ |
+| **Reviewer** | ✅ | ✅ (tests, snapshots, review artifacts only) | ✅ (verification only) | ❌ | ❌ |
 | **Coordinator** | ✅ | ✅ | ✅ | ✅ | ✅ (feature branches only) |
 
 ## Role Assignment
 
-Every agent persona file in `AGENTS/` must declare its role:
+Every agent persona file in `.agent/agents/` must declare its role:
 
 ```markdown
 ## Agent Constraints
@@ -29,11 +29,21 @@ Every agent persona file in `AGENTS/` must declare its role:
 - Blocked: [explicit list of blocked actions]
 ```
 
+`.agent/registry/persona-registry.json` is the machine-readable source of truth for role ownership, dispatch signals, and memory queries.
+
+Sync and audit commands:
+
+```bash
+node scripts/persona-registry-sync.mjs
+node scripts/persona-registry-audit.mjs
+```
+
 ## Enforcement (Phased)
 
-### Phase 1 (Current): Document role expectations
+### Phase 1 (Current): Registry-backed role expectations
 - Role matrix defined (this file)
-- Agent personas updated with role declarations
+- Persona registry defines canonical role ownership
+- Agent personas are synced from the registry
 
 ### Phase 2: Critical hard blocks
 - Block `git push` for non-coordinator roles

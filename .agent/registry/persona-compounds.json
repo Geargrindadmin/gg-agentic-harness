@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "updated": "2026-03-08",
+  "sourceOfTruth": [
+    ".agent/registry/persona-registry.json",
+    ".agent/registry/persona-compounds.json",
+    ".agent/rules/persona-dispatch-governance.md"
+  ],
+  "compounds": [
+    {
+      "id": "compound:auth-hardening:v1",
+      "source": "registry",
+      "riskTier": "high",
+      "dispatchPlan": "coordinator-plus-specialists",
+      "primaryPersona": "orchestrator",
+      "collaboratorPersonas": [
+        "backend-specialist",
+        "security-auditor",
+        "test-engineer",
+        "frontend-specialist"
+      ],
+      "memberPersonas": [
+        "orchestrator",
+        "backend-specialist",
+        "security-auditor",
+        "test-engineer",
+        "frontend-specialist"
+      ],
+      "classifications": [
+        "TASK",
+        "DECISION",
+        "CRITICAL"
+      ],
+      "selectionTriggers": [
+        "auth",
+        "authentication",
+        "login",
+        "signup",
+        "oauth",
+        "passkey",
+        "credential",
+        "session hardening",
+        "account unlock"
+      ],
+      "requiresAnyPersonaIds": [
+        "backend-specialist",
+        "security-auditor"
+      ],
+      "requiresAllPersonaIds": [],
+      "requiresAnyHighRiskTerms": [
+        "auth",
+        "authentication",
+        "login",
+        "signup",
+        "oauth",
+        "passkey",
+        "credential",
+        "password",
+        "secret",
+        "secrets"
+      ],
+      "memoryQuery": "auth hardening oauth passkey login signup security regression recent",
+      "summary": "Coordinate security-sensitive auth delivery across backend, verification, and user-facing flows.",
+      "notes": [
+        "Use when authentication changes span implementation and verification.",
+        "Keep coordinator ownership because auth changes require board review."
+      ]
+    },
+    {
+      "id": "compound:payment-reliability:v1",
+      "source": "registry",
+      "riskTier": "high",
+      "dispatchPlan": "coordinator-plus-specialists",
+      "primaryPersona": "orchestrator",
+      "collaboratorPersonas": [
+        "backend-specialist",
+        "security-auditor",
+        "database-architect",
+        "test-engineer"
+      ],
+      "memberPersonas": [
+        "orchestrator",
+        "backend-specialist",
+        "security-auditor",
+        "database-architect",
+        "test-engineer"
+      ],
+      "classifications": [
+        "TASK",
+        "DECISION",
+        "CRITICAL"
+      ],
+      "selectionTriggers": [
+        "payment",
+        "payments",
+        "checkout",
+        "billing",
+        "invoice",
+        "refund",
+        "escrow",
+        "stripe"
+      ],
+      "requiresAnyPersonaIds": [
+        "backend-specialist",
+        "database-architect"
+      ],
+      "requiresAllPersonaIds": [],
+      "requiresAnyHighRiskTerms": [
+        "payment",
+        "payments",
+        "checkout",
+        "billing",
+        "refund",
+        "invoice",
+        "escrow"
+      ],
+      "memoryQuery": "payments billing refunds invoices escrow reliability recent",
+      "summary": "Coordinate payment path changes with database, security, and verification coverage before shipping.",
+      "notes": [
+        "Use for any change that can affect invoices, refunds, or escrow correctness.",
+        "Preserve coordinator ownership because payment mutations are high-risk."
+      ]
+    },
+    {
+      "id": "compound:incident-hardening:v1",
+      "source": "registry",
+      "riskTier": "high",
+      "dispatchPlan": "coordinator-plus-specialists",
+      "primaryPersona": "orchestrator",
+      "collaboratorPersonas": [
+        "debugger",
+        "devops-engineer",
+        "security-auditor",
+        "test-engineer"
+      ],
+      "memberPersonas": [
+        "orchestrator",
+        "debugger",
+        "devops-engineer",
+        "security-auditor",
+        "test-engineer"
+      ],
+      "classifications": [
+        "TASK",
+        "DECISION",
+        "CRITICAL"
+      ],
+      "selectionTriggers": [
+        "incident",
+        "outage",
+        "rollback",
+        "production regression",
+        "alert storm",
+        "runtime smoke",
+        "staging verification"
+      ],
+      "requiresAnyPersonaIds": [
+        "debugger",
+        "devops-engineer"
+      ],
+      "requiresAllPersonaIds": [],
+      "requiresAnyHighRiskTerms": [
+        "production",
+        "deploy",
+        "rollback",
+        "secrets"
+      ],
+      "memoryQuery": "incident rollback outage alerts runtime regression recent",
+      "summary": "Coordinate incident response hardening across debugging, operational recovery, and verification evidence.",
+      "notes": [
+        "Use when recovery speed and correctness both matter.",
+        "Escalate fast if recurring failures point to missing runbooks or alerts."
+      ]
+    },
+    {
+      "id": "compound:docs-governance:v1",
+      "source": "registry",
+      "riskTier": "medium",
+      "dispatchPlan": "specialist-team",
+      "primaryPersona": "project-planner",
+      "collaboratorPersonas": [
+        "documentation-writer",
+        "product-manager",
+        "orchestrator"
+      ],
+      "memberPersonas": [
+        "project-planner",
+        "documentation-writer",
+        "product-manager",
+        "orchestrator"
+      ],
+      "classifications": [
+        "TASK",
+        "DECISION"
+      ],
+      "selectionTriggers": [
+        "prd",
+        "governance",
+        "adr",
+        "policy",
+        "workflow contract",
+        "installable harness"
+      ],
+      "requiresAnyPersonaIds": [
+        "project-planner",
+        "documentation-writer"
+      ],
+      "requiresAllPersonaIds": [],
+      "requiresAnyHighRiskTerms": [],
+      "memoryQuery": "governance docs prd adr workflow contract recent",
+      "summary": "Coordinate documentation, PRD, and governance changes when the harness contract itself is being updated.",
+      "notes": [
+        "Use for installability, policy, and workflow documentation updates.",
+        "This compound does not imply production-risk board escalation by itself."
+      ]
+    }
+  ]
+}

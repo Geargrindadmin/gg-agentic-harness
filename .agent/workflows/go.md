@@ -40,7 +40,7 @@ Just state your goal. The system handles everything else.
 | 3   | Harness          | ✅ Conductor Orchestrator        |
 | 4   | Blueprint Engine | ✅ Evaluate-Loop (auto-selected) |
 | 5   | Rules / Context  | ✅ Subdirectory-scoped           |
-| 6   | Tool Shed        | ✅ intelligent-routing selects   |
+| 6   | Tool Shed        | ✅ persona-registry resolves     |
 | 7   | Validation       | ✅ tsc + lint + tests            |
 | 8   | PR Review        | ✅ Human-approved push           |
 
@@ -57,9 +57,10 @@ You ARE the `/go` entry point. When invoked, follow this process:
 Select runtime profile from `docs/runtime-profiles.md` and apply profile memory rules:
 
 1. `claude` profile: `search -> timeline -> get_observations`
-2. `codex` profile: `search_nodes -> open_nodes`
-3. `kimi` profile: `search_nodes -> open_nodes`
-3. If memory tooling is unavailable, proceed and log `mcpCalls` status as `skipped` in run artifact
+2. `codex` profile: `search -> timeline -> get_observations`
+3. `kimi` profile: `search -> timeline -> get_observations`
+4. If the primary query tools are unavailable, fall back to `search_nodes -> open_nodes`
+5. If all memory tooling is unavailable, proceed and log `mcpCalls` status as `skipped` in run artifact
 
 Inject retrieved context before goal analysis. This prevents duplicate tracks, surfaces prior Board decisions, and avoids redundant work.
 
@@ -72,9 +73,22 @@ For `TASK|TASK_LITE|DECISION`, also follow remote task protocol:
 Initialize run evidence at the start of execution:
 
 ```bash
+node scripts/persona-registry-resolve.mjs --prompt "$ARGUMENTS" --classification TASK --json > .agent/runs/go-{timestamp}.persona-routing.json
 node scripts/agent-run-artifact.mjs init --id go-{timestamp} --runtime {codex|claude|kimi} --classification TASK
+node scripts/agent-run-artifact.mjs persona --id go-{timestamp} --resolution-file .agent/runs/go-{timestamp}.persona-routing.json
 # For TASK|TASK_LITE|DECISION: node scripts/gws-task.mjs sync-run --tasklist "$GWS_TASKLIST_ID" --run-id go-{timestamp} --title "<short task title>" --status open
 ```
+
+### 0.5 Persona Resolution
+
+Before any specialist or sub-agent routing:
+
+1. Audit the registry: `npm run harness:persona:audit`
+2. Resolve personas: `node scripts/persona-registry-resolve.mjs --prompt "$ARGUMENTS" --classification TASK --json`
+3. If the resolver returns `compoundPersona`, treat that compound's primary/collaborator set as the effective dispatch contract.
+4. If a runtime compound is returned with `promoteCompoundSuggested=true`, create a hardening follow-up to register it in `.agent/registry/persona-compounds.json`.
+5. If resolver returns `boardRequired=true`, run `/board-meeting` before fanout.
+6. If resolver returns `createPersonaSuggested=true`, follow `.agent/rules/persona-dispatch-governance.md` before creating a new persona.
 
 ### 1. Goal Analysis
 
