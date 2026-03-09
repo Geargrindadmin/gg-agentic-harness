@@ -7,6 +7,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
+        .package(url: "https://github.com/apple/swift-testing.git", from: "6.2.4"),
     ],
     targets: [
         .executableTarget(
@@ -16,6 +17,18 @@ let package = Package(
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
             ],
             path: "Sources/GGASConsole"
+        ),
+        .testTarget(
+            name: "GGHarnessControlSurfaceTests",
+            dependencies: [
+                "GGHarnessControlSurface",
+                .product(name: "Testing", package: "swift-testing")
+            ],
+            path: "Tests/GGHarnessControlSurfaceTests",
+            exclude: [
+                "A2AClientTests 2.swift",
+                "CoordinatorRuntimeSettingsTests 2.swift"
+            ]
         ),
     ]
 )

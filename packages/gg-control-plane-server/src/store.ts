@@ -68,10 +68,10 @@ export interface IntegrationSettingsRecord {
   qualityTools: {
     defaultProjectRoot: string;
     tools: {
-      promptfoo: boolean;
-      semgrep: boolean;
-      trivy: boolean;
-      gitleaks: boolean;
+      lint: boolean;
+      typeCheck: boolean;
+      test: boolean;
+      build: boolean;
     };
   };
   mcpCatalog: {
@@ -219,10 +219,10 @@ export function defaultIntegrationSettings(projectRoot: string): IntegrationSett
     qualityTools: {
       defaultProjectRoot: projectRoot,
       tools: {
-        promptfoo: false,
-        semgrep: false,
-        trivy: false,
-        gitleaks: false
+        lint: true,
+        typeCheck: false,
+        test: true,
+        build: false
       }
     },
     mcpCatalog: {
@@ -233,10 +233,57 @@ export function defaultIntegrationSettings(projectRoot: string): IntegrationSett
   };
 }
 
+function normalizeIntegrationSettings(
+  projectRoot: string,
+  settings: Partial<IntegrationSettingsRecord> & {
+    qualityTools?: {
+      defaultProjectRoot?: string;
+      tools?: Record<string, boolean | undefined>;
+    };
+  }
+): IntegrationSettingsRecord {
+  const defaults = defaultIntegrationSettings(projectRoot);
+  const legacyTools = (settings.qualityTools?.tools || {}) as Record<string, boolean | undefined>;
+
+  return {
+    liteLLM: {
+      ...defaults.liteLLM,
+      ...(settings.liteLLM || {})
+    },
+    observability: {
+      ...defaults.observability,
+      ...(settings.observability || {}),
+      langfuse: {
+        ...defaults.observability.langfuse,
+        ...(settings.observability?.langfuse || {})
+      },
+      openllmetry: {
+        ...defaults.observability.openllmetry,
+        ...(settings.observability?.openllmetry || {})
+      }
+    },
+    qualityTools: {
+      defaultProjectRoot: settings.qualityTools?.defaultProjectRoot || defaults.qualityTools.defaultProjectRoot,
+      tools: {
+        lint: Boolean(legacyTools.lint ?? legacyTools.promptfoo ?? defaults.qualityTools.tools.lint),
+        typeCheck: Boolean(legacyTools.typeCheck ?? legacyTools.typecheck ?? legacyTools.semgrep ?? defaults.qualityTools.tools.typeCheck),
+        test: Boolean(legacyTools.test ?? legacyTools.trivy ?? defaults.qualityTools.tools.test),
+        build: Boolean(legacyTools.build ?? legacyTools.gitleaks ?? defaults.qualityTools.tools.build)
+      }
+    },
+    mcpCatalog: {
+      ...defaults.mcpCatalog,
+      ...(settings.mcpCatalog || {})
+    }
+  };
+}
+
 export function readIntegrationSettings(projectRoot: string): IntegrationSettingsRecord {
-  const existing = readJson<IntegrationSettingsRecord>(serverPaths(projectRoot).settingsFile);
+  const existing = readJson<Partial<IntegrationSettingsRecord>>(serverPaths(projectRoot).settingsFile);
   if (existing) {
-    return existing;
+    const normalized = normalizeIntegrationSettings(projectRoot, existing);
+    writeJson(serverPaths(projectRoot).settingsFile, normalized);
+    return normalized;
   }
   const defaults = defaultIntegrationSettings(projectRoot);
   writeJson(serverPaths(projectRoot).settingsFile, defaults);
@@ -247,8 +294,9 @@ export function writeIntegrationSettings(
   projectRoot: string,
   settings: IntegrationSettingsRecord
 ): IntegrationSettingsRecord {
-  writeJson(serverPaths(projectRoot).settingsFile, settings);
-  return settings;
+  const normalized = normalizeIntegrationSettings(projectRoot, settings);
+  writeJson(serverPaths(projectRoot).settingsFile, normalized);
+  return normalized;
 }
 
 export function listQualityJobs(projectRoot: string): QualityJobRecord[] {

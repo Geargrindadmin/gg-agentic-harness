@@ -30,6 +30,7 @@ final class LMStudioManagerVM: ObservableObject {
     @Published var libraryModels: [LMStudioModel] = []
     @Published var activeDownloads: [DownloadProgress] = []
     @Published var isRefreshing = false
+    @Published var isStartingServer = false
     @Published var error: String?
 
     // Browse tab
@@ -58,6 +59,18 @@ final class LMStudioManagerVM: ObservableObject {
         loadedModels  = all.filter { $0.isLoaded }
         libraryModels = all.filter { !$0.isLoaded }
         isRefreshing  = false
+    }
+
+    func startServer() async {
+        isStartingServer = true
+        defer { isStartingServer = false }
+        let started = await LMStudioEngine.shared.startLocalServer(endpoint: endpoint)
+        if !started {
+            error = "Unable to start LM Studio automatically. Launch it manually or install the lms CLI."
+            return
+        }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await refresh()
     }
 
     func loadModel(_ id: String) async {
@@ -160,10 +173,15 @@ final class LMStudioManagerVM: ObservableObject {
 // MARK: - Main View
 
 struct LMStudioManagerView: View {
+    let initialSearchQuery: String?
     @StateObject private var vm = LMStudioManagerVM()
     @ObservedObject private var catalog = LMStudioCatalogService.shared
     @ObservedObject private var mgmt = ModelManagementService.shared
     @Environment(\.dismiss) private var dismiss
+
+    init(initialSearchQuery: String? = nil) {
+        self.initialSearchQuery = initialSearchQuery
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -211,6 +229,12 @@ struct LMStudioManagerView: View {
             await vm.refresh()
             await catalog.fetchFeatured()
             mgmt.startStatsPolling(endpoint: vm.endpoint_)
+            if let initialSearchQuery,
+               !initialSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                vm.activeTab = .browse
+                vm.searchQuery = initialSearchQuery
+                catalog.search(query: initialSearchQuery)
+            }
         }
         .onDisappear { mgmt.stopStatsPolling() }
     }
@@ -239,6 +263,15 @@ struct LMStudioManagerView: View {
             }
             .buttonStyle(.plain)
             .help("Refresh model list")
+
+            Button {
+                Task { await vm.startServer() }
+            } label: {
+                Image(systemName: vm.isStartingServer ? "play.circle.fill" : "play.circle")
+            }
+            .buttonStyle(.plain)
+            .disabled(vm.isStartingServer)
+            .help("Start LM Studio explicitly")
 
             Button { dismiss() } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)

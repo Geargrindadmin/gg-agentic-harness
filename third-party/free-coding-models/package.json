@@ -1,0 +1,60 @@
+{
+  "name": "free-coding-models",
+  "version": "0.1.87",
+  "description": "Find the fastest coding LLM models in seconds — ping free models from multiple providers, pick the best one for OpenCode, Cursor, or any AI coding assistant.",
+  "keywords": [
+    "nvidia",
+    "nim",
+    "llm",
+    "cli",
+    "ai",
+    "models",
+    "benchmark",
+    "latency",
+    "availability",
+    "deepseek",
+    "qwen",
+    "llama",
+    "mistral",
+    "glm",
+    "kimi",
+    "gpt",
+    "chatgpt",
+    "openai",
+    "api"
+  ],
+  "homepage": "https://github.com/vava-nessa/free-coding-models#readme",
+  "bugs": {
+    "url": "https://github.com/vava-nessa/free-coding-models/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vava-nessa/free-coding-models.git"
+  },
+  "license": "MIT",
+  "author": "vava",
+  "type": "module",
+  "main": "bin/free-coding-models.js",
+  "bin": {
+    "free-coding-models": "./bin/free-coding-models.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "sources.js",
+    "patch-openclaw.js",
+    "patch-openclaw-models.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/free-coding-models.js",
+    "test": "node --test test/test.js"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

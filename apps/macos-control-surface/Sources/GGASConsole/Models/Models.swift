@@ -153,6 +153,28 @@ struct SkillStats: Codable, Identifiable {
     let lastUsed: String?
 }
 
+struct AgentAnalyticsSummary: Codable {
+    let totalRuns: Int
+    let totalWorkers: Int
+    let activeWorkers: Int
+    let failedWorkers: Int
+    let distinctPersonas: Int
+    let distinctRuntimes: Int
+    let lastUpdatedAt: String?
+}
+
+struct AgentAnalyticsMetric: Codable, Identifiable {
+    var id: String { key }
+    let key: String
+    let label: String
+    let type: String
+    let calls: Int
+    let failures: Int
+    let active: Int
+    let avgDurationMs: Double?
+    let lastUsed: String?
+}
+
 struct DispatchRequest: Codable {
     let task: String
     let mode: String
@@ -206,10 +228,10 @@ struct IntegrationSettingsModel: Codable {
 
     struct QualityTools: Codable {
         struct ToolFlags: Codable {
-            var promptfoo: Bool
-            var semgrep: Bool
-            var trivy: Bool
-            var gitleaks: Bool
+            var lint: Bool
+            var typeCheck: Bool
+            var test: Bool
+            var build: Bool
         }
         var defaultProjectRoot: String
         var tools: ToolFlags
@@ -281,6 +303,7 @@ struct AgentStatus: Codable {
         let total: Int
         let running: Int
     }
+    let codex: BinaryInfo
     let kimi: BinaryInfo
     let claude: BinaryInfo
     let pool: PoolInfo
@@ -537,4 +560,109 @@ struct UsageProviderModel: Codable, Identifiable, Hashable {
         default: return "gray"
         }
     }
+}
+
+// MARK: - Replay models
+
+struct ReplaySourceModel: Codable, Identifiable, Hashable {
+    var id: String { key }
+    let key: String
+    let label: String
+    let root: String
+    let available: Bool
+}
+
+struct ReplaySessionModel: Codable, Identifiable, Hashable {
+    let id: String
+    let source: String
+    let path: String
+    let title: String
+    let format: String
+    let turnCount: Int
+    let modifiedAt: String
+    let sizeBytes: Int
+}
+
+struct ReplayRenderModel: Codable, Hashable {
+    let sessionId: String
+    let title: String
+    let inputPath: String
+    let outputPath: String
+    let outputUrl: String
+    let turnCount: Int
+}
+
+// MARK: - Model fit
+
+struct ModelFitSystemModel: Codable, Hashable {
+    let availableRamGb: Double?
+    let totalRamGb: Double?
+    let cpuCores: Int?
+    let cpuName: String?
+    let hasGpu: Bool?
+    let gpuName: String?
+    let gpuVramGb: Double?
+    let backend: String?
+    let unifiedMemory: Bool?
+}
+
+struct ModelFitRecommendationModel: Codable, Identifiable, Hashable {
+    var id: String { name }
+    let name: String
+    let shortName: String
+    let provider: String
+    let category: String
+    let useCase: String
+    let fitLevel: String
+    let score: Double
+    let estimatedTps: Double
+    let memoryRequiredGb: Double
+    let memoryAvailableGb: Double
+    let runtime: String
+    let runtimeLabel: String
+    let bestQuant: String
+    let contextLength: Int
+    let notes: [String]
+    let lmStudioQuery: String
+}
+
+struct ModelFitSnapshotModel: Codable, Hashable {
+    let available: Bool
+    let binaryPath: String?
+    let system: ModelFitSystemModel?
+    let recommendations: [ModelFitRecommendationModel]
+    let error: String?
+}
+
+struct ModelFitSystemSnapshotModel: Codable, Hashable {
+    let available: Bool
+    let binaryPath: String?
+    let system: ModelFitSystemModel?
+    let error: String?
+}
+
+// MARK: - Free models
+
+struct FreeModelEntryModel: Codable, Identifiable, Hashable {
+    let id: String
+    let label: String
+    let tier: String
+    let sweScore: String
+    let context: String
+}
+
+struct FreeModelProviderModel: Codable, Identifiable, Hashable {
+    var id: String { key }
+    let key: String
+    let name: String
+    let signupUrl: String
+    let modelCount: Int
+    let tiers: [String]
+    let models: [FreeModelEntryModel]
+}
+
+struct FreeModelsCatalogModel: Codable, Hashable {
+    let providers: [FreeModelProviderModel]
+    let totalProviders: Int
+    let totalModels: Int
 }

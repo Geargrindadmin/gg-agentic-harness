@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotesView: View {
     @EnvironmentObject private var forge: ForgeStore
+    @EnvironmentObject private var workflow: WorkflowContextStore
     @State private var selectedId: String?
     @State private var search = ""
     @State private var draftTitle = ""
@@ -30,6 +31,11 @@ struct NotesView: View {
             editor
         }
         .navigationTitle("Notes")
+        .task {
+            if forge.notes.isEmpty && !forge.isLoading {
+                forge.refresh()
+            }
+        }
         .alert("Notes Action Failed", isPresented: Binding(
             get: { lastError != nil },
             set: { if !$0 { lastError = nil } }
@@ -40,7 +46,12 @@ struct NotesView: View {
         }
         .onAppear {
             if selectedId == nil {
-                selectedId = forge.notes.first?.id
+                if let selectedTaskId = workflow.selectedTaskId,
+                   let linked = forge.notes.first(where: { $0.taskId == selectedTaskId }) {
+                    selectedId = linked.id
+                } else {
+                    selectedId = forge.notes.first?.id
+                }
                 loadSelectedNote()
             }
         }
@@ -138,27 +149,39 @@ struct NotesView: View {
                 }
             }
 
-            TextField("Note title", text: $draftTitle)
-                .textFieldStyle(.roundedBorder)
+            AppTextField(text: $draftTitle, placeholder: "Note title", autoFocus: true)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(NSColor.textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
+                )
 
-            TextField("Linked task ID (optional)", text: $draftTaskId)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12, design: .monospaced))
+            Picker("Linked Task", selection: $draftTaskId) {
+                Text("No linked task").tag("")
+                ForEach(taskChoices, id: \.id) { task in
+                    Text(task.title).tag(task.id)
+                }
+            }
+            .pickerStyle(.menu)
 
             Toggle("Pinned", isOn: $draftPinned)
                 .toggleStyle(.checkbox)
 
-            TextEditor(text: $draftContent)
-                .font(.body)
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(NSColor.textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
-                )
+            CommandTextEditor(
+                text: $draftContent,
+                placeholder: "Write the note…",
+                font: .systemFont(ofSize: 13)
+            )
+            .frame(minHeight: 220, maxHeight: 320)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
+            )
 
             HStack {
                 if selectedNote != nil {
@@ -188,12 +211,21 @@ struct NotesView: View {
         return forge.tasks.first(where: { $0.id == taskId })
     }
 
+    private var taskChoices: [PlannerTask] {
+        forge.tasks.sorted { left, right in
+            if left.status != right.status {
+                return left.status < right.status
+            }
+            return left.title.localizedCaseInsensitiveCompare(right.title) == .orderedAscending
+        }
+    }
+
     private func loadSelectedNote() {
         guard let selectedNote else {
             draftTitle = ""
             draftContent = ""
             draftPinned = false
-            draftTaskId = ""
+            draftTaskId = workflow.selectedTaskId ?? ""
             return
         }
         draftTitle = selectedNote.title

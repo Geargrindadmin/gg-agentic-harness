@@ -3,55 +3,70 @@
 import SwiftUI
 
 enum ConsoleTab: String, CaseIterable, Identifiable {
-    case runHistory    = "Run History"
-    case liveLog       = "Live Log"
-    case swarm         = "Swarm"
-    case agentTaskBar  = "Agents"
-    case skills        = "Skill Analytics"
-    case usage         = "Usage"
-    case control       = "Control"
-    case dispatch      = "Dispatch"
-    case trace         = "Trace"
     case tasks         = "Planner"
+    case swarm         = "Swarm"
     case notes         = "Notes"
+    case replays       = "Replays"
+    case modelFit      = "Model Fit"
+    case freeModels    = "Free Models"
+    case agentTaskBar  = "Agents"
+    case agentAnalytics = "Agent Analytics"
     case terminal      = "Terminal"
+    case control       = "Console"
+    case dispatch      = "Dispatch"
     case packages      = "Packages"
+    case skills        = "Skill Analytics"
+    case trace         = "Trace"
+    case liveLog       = "Live Log"
+    case runHistory    = "Run History"
     case config        = "Config"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .runHistory:   return "clock.arrow.circlepath"
-        case .liveLog:      return "bolt.fill"
+        case .tasks:        return "checklist"
         case .swarm:        return "circle.grid.3x3.fill"
+        case .notes:        return "note.text"
+        case .replays:      return "movieclapper.fill"
+        case .modelFit:     return "slider.horizontal.below.rectangle"
+        case .freeModels:   return "globe.americas.fill"
         case .agentTaskBar: return "list.bullet.rectangle.fill"
-        case .skills:       return "chart.bar.fill"
-        case .usage:        return "gauge.with.dots.needle.67percent"
+        case .agentAnalytics: return "chart.line.uptrend.xyaxis"
+        case .terminal:     return "terminal.fill"
         case .control:      return "cpu.fill"
         case .dispatch:     return "paperplane.fill"
-        case .trace:        return "magnifyingglass"
-        case .tasks:        return "checklist"
-        case .notes:        return "note.text"
-        case .terminal:     return "terminal.fill"
         case .packages:     return "shippingbox.fill"
+        case .skills:       return "chart.bar.fill"
+        case .trace:        return "magnifyingglass"
+        case .liveLog:      return "bolt.fill"
+        case .runHistory:   return "clock.arrow.circlepath"
         case .config:       return "gear"
         }
     }
 }
 
 struct ContentView: View {
-    @State private var selection: ConsoleTab = .runHistory
     @EnvironmentObject var forge: ForgeStore
+    @EnvironmentObject private var shell: AppShellState
 
     var body: some View {
         VStack(spacing: 0) {
             NavigationSplitView {
-                SidebarView(selection: $selection)
+                SidebarView(selection: $shell.selectedTab, showUsage: $shell.showUsage)
             } detail: {
-                detailView(for: selection)
+                detailView(for: shell.selectedTab)
             }
+            .navigationSplitViewStyle(.balanced)
             .frame(minWidth: 1100, minHeight: 678)
+            .sheet(isPresented: $shell.showUsage) {
+                UsageView()
+                    .frame(minWidth: 720, minHeight: 560)
+            }
+            .sheet(isPresented: $shell.showLMStudioManager) {
+                LMStudioManagerView(initialSearchQuery: shell.lmStudioCatalogQuery)
+                    .frame(minWidth: 860, minHeight: 560)
+            }
 
             StatusBarView()
         }
@@ -60,32 +75,24 @@ struct ContentView: View {
 
     @ViewBuilder
     private func detailView(for tab: ConsoleTab) -> some View {
-        ZStack {
-            // Terminal is ALWAYS mounted so jcode processes survive sidebar switches.
-            // It is shown when terminal tab is active, hidden otherwise.
-            TerminalTabView()
-                .opacity(tab == .terminal ? 1 : 0)
-                .allowsHitTesting(tab == .terminal)
-
-            // All other tabs are shown/hidden normally via the switch
-            if tab != .terminal {
-                switch tab {
-                case .runHistory:   RunHistoryView()
-                case .liveLog:      LiveLogView()
-                case .swarm:        SwarmView()
-                case .agentTaskBar: AgentTaskBarView()
-                case .skills:       SkillAnalyticsView()
-                case .usage:        UsageView()
-                case .control:      ControlPanelView()
-                case .dispatch:     DispatchView()
-                case .trace:        TraceView()
-                case .tasks:        TasksView()
-                case .notes:        NotesView()
-                case .packages:     PackagesTabView()
-                case .config:       ConfigView()
-                case .terminal:     EmptyView()
-                }
-            }
+        switch tab {
+        case .tasks:        TasksView()
+        case .swarm:        SwarmView()
+        case .notes:        NotesView()
+        case .replays:      ReplaysView()
+        case .modelFit:     ModelFitView()
+        case .freeModels:   FreeModelsView()
+        case .agentTaskBar: AgentTaskBarView()
+        case .agentAnalytics: AgentAnalyticsView()
+        case .terminal:     TerminalTabView()
+        case .control:      ControlPanelView()
+        case .dispatch:     DispatchView()
+        case .packages:     PackagesTabView()
+        case .skills:       SkillAnalyticsView()
+        case .trace:        TraceView()
+        case .liveLog:      LiveLogView()
+        case .runHistory:   RunHistoryView()
+        case .config:       ConfigView()
         }
     }
 }
@@ -94,50 +101,99 @@ struct ContentView: View {
 
 struct SidebarView: View {
     @Binding var selection: ConsoleTab
+    @Binding var showUsage: Bool
     @EnvironmentObject var forge: ForgeStore
     @ObservedObject private var monitor = AgentMonitorService.shared
 
+    private let primaryTabs: [ConsoleTab] = [
+        .tasks,
+        .swarm,
+        .notes,
+        .replays,
+        .modelFit,
+        .freeModels,
+        .agentTaskBar,
+        .agentAnalytics,
+        .terminal,
+        .control,
+        .dispatch,
+        .packages,
+        .skills
+    ]
+
+    private let diagnosticTabs: [ConsoleTab] = [
+        .trace,
+        .liveLog,
+        .runHistory,
+        .config
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(alignment: .center, spacing: 6) {
-                    Text("GearGrind")
-                        .font(.headline.bold())
-                    Spacer()
-                    // Task 9: Live/Offline badge driven by /api/events SSE stream health
-                    if monitor.isConnected {
-                        LiveBadge()
-                    } else {
-                        Label("Offline", systemImage: "circle.fill")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.red)
-                            .help("Harness control-plane unreachable")
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(alignment: .center, spacing: 6) {
+                        Text("GearGrind")
+                            .font(.headline.bold())
+                        Spacer()
+                        Button {
+                            showUsage = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help("Usage and harness capacity")
+                        if monitor.isConnected {
+                            LiveBadge()
+                        } else {
+                            Label("Offline", systemImage: "circle.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.red)
+                                .help("Harness control-plane unreachable")
+                        }
                     }
+                    Text("Agentic System")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Agentic System")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
 
-            ForEach(ConsoleTab.allCases) { tab in
-                SidebarButton(
-                    tab: tab,
-                    isSelected: selection == tab,
-                    badge: badgeCount(for: tab)
-                ) {
-                    selection = tab
+                sectionHeader("Operate")
+                ForEach(primaryTabs) { tab in
+                    SidebarButton(
+                        tab: tab,
+                        isSelected: selection == tab,
+                        badge: badgeCount(for: tab)
+                    ) {
+                        selection = tab
+                    }
                 }
+
+                sectionHeader("Diagnostics")
+                ForEach(diagnosticTabs) { tab in
+                    SidebarButton(
+                        tab: tab,
+                        isSelected: selection == tab,
+                        badge: badgeCount(for: tab)
+                    ) {
+                        selection = tab
+                    }
+                }
+
+                Divider()
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+
+                AgentHealthStrip()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
             }
-
-            Spacer()
-
-            AgentHealthStrip()
-                .padding(.horizontal, 8)
-                .padding(.bottom, 10)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 180)
+        .frame(minWidth: 220, idealWidth: 236, maxWidth: 250, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.windowBackgroundColor))
     }
 
@@ -146,6 +202,16 @@ struct SidebarView: View {
         case .tasks: return forge.tasks.filter { $0.status == "in_progress" }.count
         default: return 0
         }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 2)
     }
 }
 
@@ -165,6 +231,7 @@ struct AgentHealthStrip: View {
                     .padding(.horizontal, 4)
             } else if let s = status {
                 HStack(spacing: 6) {
+                    agentDot(name: "codex",  info: s.codex)
                     agentDot(name: "kimi",   info: s.kimi)
                     agentDot(name: "claude", info: s.claude)
                     Spacer()

@@ -29,6 +29,7 @@ import {
 } from '../../gg-orchestrator/dist/index.js';
 import {
   buildInteractiveRuntimeLaunchPlan,
+  discoverRuntimeCredentials,
   defaultLaunchTransport,
   selectCoordinatorRuntime,
   evaluateRuntimeLaunchPreflight,
@@ -71,6 +72,9 @@ import {
 } from './planner.js';
 import { collectUsageSnapshot } from './usage.js';
 import { WorkerSessionManager, type StructuredHarnessMessage, type StructuredHarnessState } from './sessions.js';
+import { listReplaySources, listReplaySessions, renderReplay } from './replays.js';
+import { collectLMStudioCandidates, collectModelFitSnapshot } from './model-fit.js';
+import { collectFreeModelProviders, collectFreeModelsCatalog } from './free-models.js';
 
 type DispatchMode = 'minion' | 'go';
 
@@ -174,12 +178,19 @@ const CONTROL_PLANE_CAPABILITIES = [
   'bus-status',
   'worktrees',
   'worker-streams',
-  'live-bus-stream'
+  'live-bus-stream',
+  'live-log-stream',
+  'agent-analytics',
+  'swarm-telemetry',
+  'replays',
+  'model-fit',
+  'free-models'
 ] as const;
 const CONTROL_PLANE_VERSION = loadControlPlaneVersion();
 const queue: QueueItem[] = [];
 const runningControllers = new Map<string, AbortController>();
 const taskLogSubscribers = new Map<string, Set<ServerResponse>>();
+const liveLogSubscribers = new Set<ServerResponse>();
 const busSubscribers = new Map<string, Set<ServerResponse>>();
 const workerStreamSubscribers = new Map<string, Set<ServerResponse>>();
 const eventSubscribers = new Set<ServerResponse>();
@@ -413,8 +424,78 @@ function activeWorkerCount(): number {
   return runningControllers.size + sessionManager.count();
 }
 
+function activeWorkerCountByRuntime(runtime: RuntimeId): number {
+  const activeStatuses = new Set(['spawn_requested', 'planned', 'queued', 'running']);
+  return listRunStates(PROJECT_ROOT).reduce((total, run) => {
+    return (
+      total +
+      run.workers.filter((worker) => worker.runtime === runtime && activeStatuses.has(worker.status)).length
+    );
+  }, 0);
+}
+
 function governorSnapshot() {
   return governor.snapshot(activeWorkerCount(), queue.length);
+}
+
+function classifyLogLevel(line: string): 'info' | 'warn' | 'error' | 'debug' {
+  const normalized = line.toUpperCase();
+  if (normalized.includes('AGENT_FAILED') || normalized.includes('SPAWN_FAILED') || normalized.includes('ERROR')) {
+    return 'error';
+  }
+  if (normalized.includes('BLOCKED') || normalized.includes('WARN')) {
+    return 'warn';
+  }
+  if (normalized.includes('DEBUG')) {
+    return 'debug';
+  }
+  return 'info';
+}
+
+function summarizeCounts(values: string[]): Array<{ key: string; label: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const value of values.filter(Boolean)) {
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({
+      key,
+      label: key
+        .split(/[-_]/g)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+      count
+    }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function humanizeKey(value: string): string {
+  return value
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function taskLogEnvelope(runId: string, line: string, ts = nowIso(), seed?: string) {
+  return {
+    id: seed || `${runId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    ts,
+    level: classifyLogLevel(line),
+    msg: line,
+    runId
+  };
+}
+
+function recentTaskLogEnvelopes(limit = 200): ReturnType<typeof taskLogEnvelope>[] {
+  const records = listTaskRecords(PROJECT_ROOT).slice(0, 12).reverse();
+  const lines = records.flatMap((record) =>
+    record.log.map((line, index) =>
+      taskLogEnvelope(record.runId, line, record.updatedAt || record.startedAt, `${record.runId}-${index}`)
+    )
+  );
+  return lines.slice(-limit);
 }
 
 function emitTaskLog(runId: string, line: string): void {
@@ -423,16 +504,30 @@ function emitTaskLog(runId: string, line: string): void {
     return;
   }
 
+  const envelope = taskLogEnvelope(
+    runId,
+    line,
+    record.updatedAt || nowIso(),
+    `${runId}-${Math.max(0, record.log.length - 1)}`
+  );
   const subscribers = taskLogSubscribers.get(runId);
-  if (!subscribers) {
-    return;
+  if (subscribers) {
+    const payload = `data: ${JSON.stringify({ line, logLine: envelope })}\n\n`;
+    for (const res of subscribers) {
+      try {
+        res.write(payload);
+      } catch {
+        subscribers.delete(res);
+      }
+    }
   }
-  const payload = `data: ${JSON.stringify({ line })}\n\n`;
-  for (const res of subscribers) {
+
+  const livePayload = `data: ${JSON.stringify({ line: envelope })}\n\n`;
+  for (const res of liveLogSubscribers) {
     try {
-      res.write(payload);
+      res.write(livePayload);
     } catch {
-      subscribers.delete(res);
+      liveLogSubscribers.delete(res);
     }
   }
 }
@@ -1084,6 +1179,12 @@ function sendSseHeaders(res: ServerResponse): void {
 }
 
 function busRunStatus(run: RunState): Record<string, unknown> {
+  const snapshot = governorSnapshot();
+  const runtimeBreakdown = summarizeCounts(run.workers.map((worker) => worker.runtime));
+  const roleBreakdown = summarizeCounts(run.workers.map((worker) => worker.role));
+  const activeStatuses = new Set(['spawn_requested', 'planned', 'queued', 'running']);
+  const completedStatuses = new Set(['completed', 'terminated']);
+
   return {
     runId: run.runId,
     totalMessages: run.messages.length,
@@ -1095,11 +1196,35 @@ function busRunStatus(run: RunState): Record<string, unknown> {
           progressPct: progressForStatus(worker.status),
           lastHeartbeat: worker.updatedAt,
           currentTask: worker.taskSummary,
-          worktreePath: worker.worktree
+          worktreePath: worker.worktree,
+          runtime: worker.runtime,
+          role: worker.role,
+          personaId: worker.persona.personaId,
+          launchTransport: worker.launchTransport,
+          executionStatus: worker.execution.status,
+          lastSummary: worker.execution.lastSummary || null
         }
       ])
     ),
-    activeLocks: {}
+    activeLocks: {},
+    telemetry: {
+      coordinatorRuntime: run.coordinatorRuntime,
+      totalWorkers: run.workers.length,
+      activeWorkers: run.workers.filter((worker) => activeStatuses.has(worker.status)).length,
+      queuedWorkers: run.workers.filter((worker) => worker.status === 'queued').length,
+      completedWorkers: run.workers.filter((worker) => completedStatuses.has(worker.status)).length,
+      failedWorkers: run.workers.filter((worker) => ['failed', 'blocked'].includes(worker.status)).length,
+      handoffReadyWorkers: run.workers.filter((worker) => worker.status === 'handoff_ready').length,
+      activeLocks: 0,
+      totalMessages: run.messages.length,
+      delegationCount: run.delegationDecisions.filter((decision) => decision.status === 'approved').length,
+      runtimeBreakdown,
+      roleBreakdown,
+      governorAllowedAgents: snapshot.allowedAgents,
+      governorActiveWorkers: snapshot.activeWorkers,
+      governorQueuedWorkers: snapshot.queuedWorkers,
+      updatedAt: run.updatedAt
+    }
   };
 }
 
@@ -1426,6 +1551,198 @@ function readSkillStats(projectRoot: string): Array<{
     .sort((left, right) => right.calls - left.calls || left.skill.localeCompare(right.skill));
 }
 
+function readAgentAnalytics(projectRoot: string): {
+  summary: {
+    totalRuns: number;
+    totalWorkers: number;
+    activeWorkers: number;
+    failedWorkers: number;
+    distinctPersonas: number;
+    distinctRuntimes: number;
+    lastUpdatedAt: string | null;
+  };
+  coordinators: Array<{
+    key: string;
+    label: string;
+    type: string;
+    calls: number;
+    failures: number;
+    active: number;
+    avgDurationMs: number | null;
+    lastUsed: string | null;
+  }>;
+  workerRuntimes: Array<{
+    key: string;
+    label: string;
+    type: string;
+    calls: number;
+    failures: number;
+    active: number;
+    avgDurationMs: number | null;
+    lastUsed: string | null;
+  }>;
+  personas: Array<{
+    key: string;
+    label: string;
+    type: string;
+    calls: number;
+    failures: number;
+    active: number;
+    avgDurationMs: number | null;
+    lastUsed: string | null;
+  }>;
+  roles: Array<{
+    key: string;
+    label: string;
+    type: string;
+    calls: number;
+    failures: number;
+    active: number;
+    avgDurationMs: number | null;
+    lastUsed: string | null;
+  }>;
+} {
+  type AggregateEntry = {
+    key: string;
+    label: string;
+    type: string;
+    calls: number;
+    failures: number;
+    active: number;
+    totalDurationMs: number;
+    durationCount: number;
+    lastUsed: string | null;
+  };
+
+  const runs = listRunStates(projectRoot);
+  const coordinators = new Map<string, AggregateEntry>();
+  const workerRuntimes = new Map<string, AggregateEntry>();
+  const personas = new Map<string, AggregateEntry>();
+  const roles = new Map<string, AggregateEntry>();
+
+  const activeStatuses = new Set(['spawn_requested', 'planned', 'queued', 'running']);
+  const failedStatuses = new Set(['failed', 'blocked']);
+  const personaSet = new Set<string>();
+  const runtimeSet = new Set<string>();
+  let totalWorkers = 0;
+  let activeWorkers = 0;
+  let failedWorkers = 0;
+  let lastUpdatedAt: string | null = null;
+
+  const ingest = (
+    map: Map<string, AggregateEntry>,
+    key: string,
+    label: string,
+    type: string,
+    failed: boolean,
+    active: boolean,
+    lastUsed: string | null,
+    durationMs: number | null
+  ) => {
+    const existing = map.get(key) || {
+      key,
+      label,
+      type,
+      calls: 0,
+      failures: 0,
+      active: 0,
+      totalDurationMs: 0,
+      durationCount: 0,
+      lastUsed: null
+    };
+    existing.calls += 1;
+    if (failed) {
+      existing.failures += 1;
+    }
+    if (active) {
+      existing.active += 1;
+    }
+    if (durationMs !== null) {
+      existing.totalDurationMs += durationMs;
+      existing.durationCount += 1;
+    }
+    if (lastUsed && (!existing.lastUsed || lastUsed > existing.lastUsed)) {
+      existing.lastUsed = lastUsed;
+    }
+    map.set(key, existing);
+  };
+
+  for (const run of runs) {
+    const runFailed = run.workers.some((worker) => failedStatuses.has(worker.status));
+    const runActive = run.workers.some((worker) => activeStatuses.has(worker.status));
+    const runLastUsed = run.updatedAt || run.createdAt;
+    const runDurationMs = Math.max(0, Date.parse(run.updatedAt) - Date.parse(run.createdAt));
+    ingest(
+      coordinators,
+      run.coordinatorRuntime,
+      humanizeKey(run.coordinatorRuntime),
+      'coordinator',
+      runFailed,
+      runActive,
+      runLastUsed,
+      Number.isFinite(runDurationMs) ? runDurationMs : null
+    );
+
+    if (runLastUsed && (!lastUpdatedAt || runLastUsed > lastUpdatedAt)) {
+      lastUpdatedAt = runLastUsed;
+    }
+
+    for (const worker of run.workers) {
+      totalWorkers += 1;
+      runtimeSet.add(worker.runtime);
+      personaSet.add(worker.persona.personaId);
+      const active = activeStatuses.has(worker.status);
+      const failed = failedStatuses.has(worker.status);
+      if (active) {
+        activeWorkers += 1;
+      }
+      if (failed) {
+        failedWorkers += 1;
+      }
+
+      const workerLastUsed = worker.updatedAt || run.updatedAt || run.createdAt;
+      const workerDurationMs =
+        worker.execution.lastStartedAt && worker.execution.lastCompletedAt
+          ? Math.max(0, Date.parse(worker.execution.lastCompletedAt) - Date.parse(worker.execution.lastStartedAt))
+          : null;
+
+      ingest(workerRuntimes, worker.runtime, humanizeKey(worker.runtime), 'worker-runtime', failed, active, workerLastUsed, workerDurationMs);
+      ingest(personas, worker.persona.personaId, worker.persona.personaId, 'persona', failed, active, workerLastUsed, workerDurationMs);
+      ingest(roles, worker.role, humanizeKey(worker.role), 'role', failed, active, workerLastUsed, workerDurationMs);
+    }
+  }
+
+  const finalize = (map: Map<string, AggregateEntry>) =>
+    Array.from(map.values())
+      .map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        type: entry.type,
+        calls: entry.calls,
+        failures: entry.failures,
+        active: entry.active,
+        avgDurationMs: entry.durationCount ? entry.totalDurationMs / entry.durationCount : null,
+        lastUsed: entry.lastUsed
+      }))
+      .sort((left, right) => right.calls - left.calls || left.label.localeCompare(right.label));
+
+  return {
+    summary: {
+      totalRuns: runs.length,
+      totalWorkers,
+      activeWorkers,
+      failedWorkers,
+      distinctPersonas: personaSet.size,
+      distinctRuntimes: runtimeSet.size,
+      lastUpdatedAt
+    },
+    coordinators: finalize(coordinators),
+    workerRuntimes: finalize(workerRuntimes),
+    personas: finalize(personas),
+    roles: finalize(roles)
+  };
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method || 'GET';
   const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
@@ -1459,15 +1776,24 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     if (pathname === '/api/status') {
       const tasks = listTaskRecords(PROJECT_ROOT);
       const snapshot = governorSnapshot();
+      const codexDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'codex');
+      const claudeDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'claude');
+      const kimiDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'kimi');
       json(res, 200, {
+        codex: {
+          available: codexDiscovery.authenticated,
+          path: codexDiscovery.binaryPath,
+          runningAcp: activeWorkerCountByRuntime('codex')
+        },
         kimi: {
-          available: Boolean(process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY),
-          path: 'provider-api',
-          runningAcp: activeWorkerCount()
+          available: kimiDiscovery.authenticated,
+          path: kimiDiscovery.binaryPath || (kimiDiscovery.directApiAvailable ? 'provider-api' : null),
+          runningAcp: activeWorkerCountByRuntime('kimi')
         },
         claude: {
-          available: false,
-          path: null
+          available: claudeDiscovery.authenticated,
+          path: claudeDiscovery.binaryPath,
+          runningAcp: activeWorkerCountByRuntime('claude')
         },
         pool: {
           total: snapshot.allowedAgents,
@@ -1676,11 +2002,27 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       }
       sendSseHeaders(res);
       taskLogSubscribers.set(runId, (taskLogSubscribers.get(runId) || new Set()).add(res));
-      for (const line of task.log) {
-        res.write(`data: ${JSON.stringify({ line })}\n\n`);
-      }
+      task.log.forEach((line, index) => {
+        const logLine = taskLogEnvelope(runId, line, task.updatedAt || task.startedAt, `${runId}-${index}`);
+        res.write(`data: ${JSON.stringify({ line, logLine })}\n\n`);
+      });
       req.on('close', () => {
         taskLogSubscribers.get(runId)?.delete(res);
+      });
+      return;
+    }
+
+    if (pathname === '/api/logs/stream' && method === 'GET') {
+      sendSseHeaders(res);
+      for (const line of recentTaskLogEnvelopes()) {
+        res.write(`data: ${JSON.stringify({ line })}\n\n`);
+      }
+      liveLogSubscribers.add(res);
+      req.on('close', () => {
+        liveLogSubscribers.delete(res);
+      });
+      req.on('aborted', () => {
+        liveLogSubscribers.delete(res);
       });
       return;
     }
@@ -1758,6 +2100,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     if (pathname === '/api/skill-stats' && method === 'GET') {
       json(res, 200, { stats: readSkillStats(PROJECT_ROOT) });
+      return;
+    }
+
+    if (pathname === '/api/agent-analytics' && method === 'GET') {
+      json(res, 200, readAgentAnalytics(PROJECT_ROOT));
       return;
     }
 
@@ -1901,6 +2248,76 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
     if (pathname === '/api/usage' && method === 'GET') {
       json(res, 200, await collectUsageSnapshot());
+      return;
+    }
+
+    if (pathname === '/api/replays/sources' && method === 'GET') {
+      json(res, 200, { sources: listReplaySources() });
+      return;
+    }
+
+    if (pathname === '/api/replays/sessions' && method === 'GET') {
+      const limit = Number(url.searchParams.get('limit') || 100);
+      json(res, 200, { sessions: await listReplaySessions(PROJECT_ROOT, Number.isFinite(limit) ? limit : 100) });
+      return;
+    }
+
+    if (pathname === '/api/replays/render' && method === 'POST') {
+      const body = await parseJsonBody<{ path?: string }>(req);
+      if (!body.path) {
+        json(res, 400, { error: 'path is required' });
+        return;
+      }
+      json(res, 200, await renderReplay(PROJECT_ROOT, body.path));
+      return;
+    }
+
+    if (pathname === '/api/replays/file' && method === 'GET') {
+      const target = url.searchParams.get('path') || '';
+      if (!target || !fs.existsSync(target)) {
+        json(res, 404, { error: 'Replay file not found' });
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.end(fs.readFileSync(target, 'utf8'));
+      return;
+    }
+
+    if (pathname === '/api/model-fit/recommendations' && method === 'GET') {
+      const limit = Number(url.searchParams.get('limit') || 12);
+      json(res, 200, collectModelFitSnapshot(Number.isFinite(limit) ? limit : 12));
+      return;
+    }
+
+    if (pathname === '/api/model-fit/system' && method === 'GET') {
+      const snapshot = collectModelFitSnapshot(8);
+      json(res, 200, {
+        available: snapshot.available,
+        binaryPath: snapshot.binaryPath,
+        system: snapshot.system,
+        error: snapshot.error
+      });
+      return;
+    }
+
+    if (pathname === '/api/model-fit/lmstudio-candidates' && method === 'GET') {
+      const limit = Number(url.searchParams.get('limit') || 12);
+      json(res, 200, {
+        candidates: collectLMStudioCandidates(Number.isFinite(limit) ? limit : 12)
+      });
+      return;
+    }
+
+    if (pathname === '/api/free-models/providers' && method === 'GET') {
+      json(res, 200, {
+        providers: await collectFreeModelProviders(PROJECT_ROOT)
+      });
+      return;
+    }
+
+    if (pathname === '/api/free-models/catalog' && method === 'GET') {
+      json(res, 200, await collectFreeModelsCatalog(PROJECT_ROOT));
       return;
     }
 

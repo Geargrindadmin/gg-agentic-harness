@@ -7,14 +7,16 @@ import Foundation
 // MARK: - Coordinator Types
 
 enum CoordinatorType: String, CaseIterable, Identifiable, Codable {
-    case claude   = "Claude API"
-    case kimi     = "Kimi CLI"
+    case codex    = "Codex"
+    case claude   = "Claude Code"
+    case kimi     = "Kimi Code"
     case lmStudio = "LM Studio"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
+        case .codex:    return "chevron.left.forwardslash.chevron.right"
         case .claude:   return "c.circle.fill"
         case .kimi:     return "k.circle.fill"
         case .lmStudio: return "cpu.fill"
@@ -23,10 +25,141 @@ enum CoordinatorType: String, CaseIterable, Identifiable, Codable {
 
     var accentColor: Color {
         switch self {
+        case .codex:    return Color(red: 0.19, green: 0.69, blue: 0.96)
         case .claude:   return Color(red: 0.73, green: 0.53, blue: 1.00)   // purple
         case .kimi:     return Color(red: 0.20, green: 0.75, blue: 1.00)   // blue
         case .lmStudio: return Color(red: 0.94, green: 0.72, blue: 0.18)   // amber
         }
+    }
+}
+
+enum WorkerRuntimeOption: String, CaseIterable, Identifiable, Codable {
+    case codex
+    case claude
+    case kimi
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .codex: return "Codex"
+        case .claude: return "Claude Code"
+        case .kimi: return "Kimi Code"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .codex: return "chevron.left.forwardslash.chevron.right"
+        case .claude: return "c.circle.fill"
+        case .kimi: return "k.circle.fill"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .codex: return Color(red: 0.19, green: 0.69, blue: 0.96)
+        case .claude: return Color(red: 0.73, green: 0.53, blue: 1.00)
+        case .kimi: return Color(red: 0.20, green: 0.75, blue: 1.00)
+        }
+    }
+
+    var defaultModel: String {
+        switch self {
+        case .codex: return "gpt-5.3-codex"
+        case .claude: return "claude-sonnet-4-6"
+        case .kimi: return "kimi-k2.5"
+        }
+    }
+
+    func backend(topology: WorkerTopologyOption) -> String {
+        switch (self, topology) {
+        case (.codex, .single): return "codex-agent"
+        case (.codex, .team): return "codex-swarm"
+        case (.claude, .single): return "claude-agent"
+        case (.claude, .team): return "claude-swarm"
+        case (.kimi, .single): return "kimi-bridge-agent"
+        case (.kimi, .team): return "kimi-bridge-swarm"
+        }
+    }
+}
+
+enum WorkerTopologyOption: String, CaseIterable, Identifiable, Codable {
+    case single
+    case team
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .single: return "Single Worker"
+        case .team: return "Agent Team"
+        }
+    }
+}
+
+enum WorkerRoleOption: String, CaseIterable, Identifiable, Codable {
+    case scout
+    case planner
+    case builder
+    case reviewer
+    case assembler
+    case specialist
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .scout: return "Scout"
+        case .planner: return "Planner"
+        case .builder: return "Builder"
+        case .reviewer: return "Reviewer"
+        case .assembler: return "Assembler"
+        case .specialist: return "Specialist"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .scout: return "binoculars.fill"
+        case .planner: return "list.bullet.clipboard.fill"
+        case .builder: return "hammer.fill"
+        case .reviewer: return "checkmark.shield.fill"
+        case .assembler: return "square.stack.3d.down.right.fill"
+        case .specialist: return "sparkles"
+        }
+    }
+
+    var defaultPersonaId: String {
+        switch self {
+        case .scout:
+            return "explorer-agent"
+        case .planner:
+            return "project-planner"
+        case .reviewer:
+            return "test-engineer"
+        case .builder, .assembler, .specialist:
+            return "backend-specialist"
+        }
+    }
+
+    var personaLabel: String {
+        switch defaultPersonaId {
+        case "explorer-agent":
+            return "Explorer Agent"
+        case "project-planner":
+            return "Project Planner"
+        case "test-engineer":
+            return "Test Engineer"
+        case "backend-specialist":
+            return "Backend Specialist"
+        default:
+            return defaultPersonaId
+        }
+    }
+
+    var personaSummary: String {
+        "\(label) -> \(personaLabel)"
     }
 }
 
@@ -42,8 +175,12 @@ struct CoordinatorConfig: Identifiable, Codable {
     var isBuiltIn: Bool = false  // built-ins can't be deleted
 
     static func claudeDefault() -> CoordinatorConfig {
-        CoordinatorConfig(type: .claude, label: "claude-opus-4",
+        CoordinatorConfig(type: .claude, label: "claude-opus-4-5",
                           endpoint: "", model: "claude-opus-4-5", isBuiltIn: true)
+    }
+    static func codexDefault() -> CoordinatorConfig {
+        CoordinatorConfig(type: .codex, label: "gpt-5.3-codex",
+                          endpoint: "", model: "gpt-5.3-codex", isBuiltIn: true)
     }
     static func kimiDefault() -> CoordinatorConfig {
         let bin = ProcessInfo.processInfo.environment["KIMI_BINARY"] ?? "kimi"
@@ -87,9 +224,9 @@ struct LMStudioSettings {
 }
 
 struct CoordinatorRuntimeSettings: Codable {
-    var workerBackend: String = "kimi-pool"
-    var workerModel: String = "kimi-3.5"
-    var dispatchPath: String = "kimi-pool"
+    var workerBackend: String = "kimi-bridge-agent"
+    var workerModel: String = "kimi-k2.5"
+    var dispatchPath: String = "kimi-bridge-agent"
     var bridgeContext: String = ""
     var bridgeWorktree: String = "."
     var bridgeAgents: Int = 4
@@ -106,9 +243,9 @@ struct CoordinatorRuntimeSettings: Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        workerBackend = try c.decodeIfPresent(String.self, forKey: .workerBackend) ?? "kimi-pool"
+        workerBackend = try c.decodeIfPresent(String.self, forKey: .workerBackend) ?? "kimi-bridge-agent"
         workerModel = try c.decodeIfPresent(String.self, forKey: .workerModel) ?? "kimi-3.5"
-        dispatchPath = try c.decodeIfPresent(String.self, forKey: .dispatchPath) ?? "kimi-pool"
+        dispatchPath = try c.decodeIfPresent(String.self, forKey: .dispatchPath) ?? "kimi-bridge-agent"
         bridgeContext = try c.decodeIfPresent(String.self, forKey: .bridgeContext) ?? ""
         bridgeWorktree = try c.decodeIfPresent(String.self, forKey: .bridgeWorktree) ?? "."
         bridgeAgents = try c.decodeIfPresent(Int.self, forKey: .bridgeAgents) ?? 4
@@ -128,6 +265,122 @@ struct CoordinatorRuntimeSettings: Codable {
         try c.encode(bridgeStrategy, forKey: .bridgeStrategy)
         try c.encode(bridgeRoles, forKey: .bridgeRoles)
         try c.encode(bridgeTimeoutSeconds, forKey: .bridgeTimeoutSeconds)
+    }
+
+    var selectedWorkerRuntime: WorkerRuntimeOption {
+        let backend = workerBackend.lowercased()
+        if backend.contains("claude") {
+            return .claude
+        }
+        if backend.contains("codex") {
+            return .codex
+        }
+        return .kimi
+    }
+
+    var selectedWorkerTopology: WorkerTopologyOption {
+        workerBackend.lowercased().contains("swarm") ? .team : .single
+    }
+
+    var selectedWorkerRoles: [WorkerRoleOption] {
+        bridgeRoles
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .compactMap(WorkerRoleOption.init(rawValue:))
+            .reduce(into: [WorkerRoleOption]()) { partialResult, role in
+                if !partialResult.contains(role) {
+                    partialResult.append(role)
+                }
+            }
+    }
+
+    var usesExplicitWorkerRoles: Bool {
+        !selectedWorkerRoles.isEmpty
+    }
+
+    var recommendedWorkerRoles: [WorkerRoleOption] {
+        let requestedCount = max(1, min(6, bridgeAgents))
+        let sequence: [WorkerRoleOption] = [.scout, .builder, .reviewer, .planner, .specialist, .assembler]
+        return Array(sequence.prefix(requestedCount))
+    }
+
+    var effectiveWorkerRoles: [WorkerRoleOption] {
+        usesExplicitWorkerRoles ? selectedWorkerRoles : recommendedWorkerRoles
+    }
+
+    var bridgeRolesForDispatch: [String]? {
+        let roles = selectedWorkerRoles.map(\.rawValue)
+        return roles.isEmpty ? nil : roles
+    }
+
+    var effectiveBridgeAgentsForDispatch: Int {
+        if selectedWorkerTopology == .team, usesExplicitWorkerRoles {
+            return max(selectedWorkerRoles.count, 1)
+        }
+        return bridgeAgents
+    }
+
+    var plannedWorkerCount: Int {
+        if selectedWorkerTopology == .team, usesExplicitWorkerRoles {
+            return max(selectedWorkerRoles.count, 1)
+        }
+        return selectedWorkerTopology == .team ? max(bridgeAgents, 2) : 1
+    }
+
+    var workerPlanLabel: String {
+        if selectedWorkerTopology == .team {
+            return "\(selectedWorkerRuntime.label) Team ×\(plannedWorkerCount)"
+        }
+        return "\(selectedWorkerRuntime.label) Single"
+    }
+
+    mutating func setWorkerRuntime(_ runtime: WorkerRuntimeOption) {
+        let previousRuntime = selectedWorkerRuntime
+        let topology = selectedWorkerTopology
+        let currentModel = workerModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldResetModel = currentModel.isEmpty || currentModel == previousRuntime.defaultModel
+        workerBackend = runtime.backend(topology: topology)
+        dispatchPath = workerBackend
+        if shouldResetModel {
+            workerModel = runtime.defaultModel
+        }
+        if topology == .team && bridgeAgents < 2 {
+            bridgeAgents = 3
+        }
+    }
+
+    mutating func setWorkerTopology(_ topology: WorkerTopologyOption) {
+        workerBackend = selectedWorkerRuntime.backend(topology: topology)
+        dispatchPath = workerBackend
+        if topology == .team && bridgeAgents < 2 {
+            bridgeAgents = 3
+        }
+    }
+
+    mutating func toggleWorkerRole(_ role: WorkerRoleOption) {
+        var roles = usesExplicitWorkerRoles ? selectedWorkerRoles : recommendedWorkerRoles
+        if let existingIndex = roles.firstIndex(of: role) {
+            roles.remove(at: existingIndex)
+        } else {
+            roles.append(role)
+        }
+        bridgeRoles = roles.map(\.rawValue).joined(separator: ", ")
+        bridgeAgents = max(roles.count, 1)
+    }
+
+    mutating func resetWorkerRolesToHarnessDefault() {
+        bridgeRoles = ""
+    }
+
+    mutating func applyWorkerRoles(_ roles: [WorkerRoleOption]) {
+        let uniqueRoles = roles.reduce(into: [WorkerRoleOption]()) { partialResult, role in
+            if !partialResult.contains(role) {
+                partialResult.append(role)
+            }
+        }
+        bridgeRoles = uniqueRoles.map(\.rawValue).joined(separator: ", ")
+        bridgeAgents = max(uniqueRoles.count, 1)
+        setWorkerTopology(.team)
     }
 }
 
@@ -162,7 +415,7 @@ final class CoordinatorManager: ObservableObject {
 
     private init() {
         let defaults: [CoordinatorConfig] = [
-            .claudeDefault(), .kimiDefault(), .lmStudioDefault()
+            .codexDefault(), .claudeDefault(), .kimiDefault(), .lmStudioDefault()
         ]
         self.coordinators = defaults
         self.activeId = defaults[0].id
@@ -188,15 +441,37 @@ final class CoordinatorManager: ObservableObject {
 
         do {
             let selectedProviderId = ProviderDetectionService.shared.selectedProvider?.id
+            let dispatchIdentity = dispatchIdentity(for: coord, selectedProviderId: selectedProviderId)
             switch coord.type {
+            case .codex:
+                let run = try await A2AClient.shared.dispatch(
+                    task: task,
+                    mode: "auto",
+                    source: dispatchIdentity.source,
+                    coordinator: dispatchIdentity.coordinator,
+                    model: coord.model,
+                    coordinatorProvider: dispatchIdentity.coordinatorProvider,
+                    coordinatorModel: coord.model,
+                    workerBackend: runtimeSettings.workerBackend,
+                    workerModel: runtimeSettings.workerModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : runtimeSettings.workerModel,
+                    dispatchPath: runtimeSettings.dispatchPath,
+                    bridgeContext: normalizedBridgeContext,
+                    bridgeWorktree: normalizedBridgeWorktree,
+                    bridgeAgents: runtimeSettings.bridgeAgents,
+                    bridgeStrategy: runtimeSettings.bridgeStrategy,
+                    bridgeRoles: normalizedBridgeRoles,
+                    bridgeTimeoutSeconds: runtimeSettings.bridgeTimeoutSeconds
+                )
+                addLine("✅ run:\(run.runId) dispatched (Codex)", level: .success)
+
             case .claude:
                 let run = try await A2AClient.shared.dispatch(
                     task: task,
                     mode: "auto",
-                    source: "coordinator-claude",
-                    coordinator: "claude",
+                    source: dispatchIdentity.source,
+                    coordinator: dispatchIdentity.coordinator,
                     model: coord.model,
-                    coordinatorProvider: selectedProviderId,
+                    coordinatorProvider: dispatchIdentity.coordinatorProvider,
                     coordinatorModel: coord.model,
                     workerBackend: runtimeSettings.workerBackend,
                     workerModel: runtimeSettings.workerModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : runtimeSettings.workerModel,
@@ -223,10 +498,10 @@ final class CoordinatorManager: ObservableObject {
                 let run = try await A2AClient.shared.dispatch(
                     task: task,
                     mode: "auto",
-                    source: "coordinator-kimi",
-                    coordinator: "custom",
+                    source: dispatchIdentity.source,
+                    coordinator: dispatchIdentity.coordinator,
                     model: coord.model,
-                    coordinatorProvider: "antigravity",
+                    coordinatorProvider: dispatchIdentity.coordinatorProvider,
                     coordinatorModel: coord.model,
                     workerBackend: runtimeSettings.workerBackend,
                     workerModel: runtimeSettings.workerModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : runtimeSettings.workerModel,
@@ -238,7 +513,7 @@ final class CoordinatorManager: ObservableObject {
                     bridgeRoles: normalizedBridgeRoles,
                     bridgeTimeoutSeconds: runtimeSettings.bridgeTimeoutSeconds
                 )
-                addLine("✅ run:\(run.runId) dispatched (Kimi →A2A)", level: .success)
+                addLine("✅ run:\(run.runId) dispatched (Kimi → harness)", level: .success)
 
 
             case .lmStudio:
@@ -369,20 +644,12 @@ final class CoordinatorManager: ObservableObject {
         for i in coordinators.indices {
             let online: Bool
             switch coordinators[i].type {
+            case .codex:
+                online = localBinaryExists(command: "codex", envVar: "CODEX_BINARY")
             case .claude:
                 online = await A2AClient.shared.ping()
             case .kimi:
-                let bin = coordinators[i].model
-                if bin.hasPrefix("/") {
-                    online = FileManager.default.fileExists(atPath: bin)
-                } else {
-                    // Check common binary locations on macOS
-                    let searchPaths = ["/usr/local/bin", "/usr/bin", "/opt/homebrew/bin",
-                                       "\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.cargo/bin"]
-                    online = searchPaths.contains { dir in
-                        FileManager.default.fileExists(atPath: "\(dir)/\(bin)")
-                    }
-                }
+                online = localBinaryExists(command: coordinators[i].model, envVar: "KIMI_BINARY")
             case .lmStudio:
                 let ep = coordinators[i].endpoint
                 online = await LMStudioEngine.shared.ping(endpoint: ep)
@@ -415,10 +682,41 @@ final class CoordinatorManager: ObservableObject {
     }
 
     private var normalizedBridgeRoles: [String]? {
-        let roles = runtimeSettings.bridgeRoles
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return roles.isEmpty ? nil : roles
+        runtimeSettings.bridgeRolesForDispatch
+    }
+
+    func dispatchIdentity(for coord: CoordinatorConfig, selectedProviderId: String?) -> (source: String, coordinator: String, coordinatorProvider: String?) {
+        switch coord.type {
+        case .codex:
+            return ("coordinator-codex", "codex", selectedProviderId ?? "openai")
+        case .claude:
+            return ("coordinator-claude", "claude", selectedProviderId ?? "claude")
+        case .kimi:
+            return ("coordinator-kimi", "kimi", "antigravity")
+        case .lmStudio:
+            return ("coordinator-lmstudio", "custom", selectedProviderId)
+        }
+    }
+
+    private func localBinaryExists(command: String, envVar: String? = nil) -> Bool {
+        if let envVar, let envPath = ProcessInfo.processInfo.environment[envVar], !envPath.isEmpty {
+            return FileManager.default.fileExists(atPath: envPath)
+        }
+
+        if command.hasPrefix("/") {
+            return FileManager.default.fileExists(atPath: command)
+        }
+
+        let searchPaths = [
+            "/usr/local/bin",
+            "/usr/bin",
+            "/opt/homebrew/bin",
+            "\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.cargo/bin",
+            "\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin",
+            "\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.kimi/bin"
+        ]
+        return searchPaths.contains { dir in
+            FileManager.default.fileExists(atPath: "\(dir)/\(command)")
+        }
     }
 }

@@ -1,29 +1,25 @@
 // ControlPanelView.swift — Mission control for coordinator agents.
-// Switch between Claude API, Kimi CLI, LM Studio, and dispatch commands.
+// Select the coordinating LLM, steer harness-managed sub-agent deployment, and dispatch tasks.
 
 import SwiftUI
 
 struct ControlPanelView: View {
     @EnvironmentObject private var launcher: LaunchManager
+    @EnvironmentObject private var workflow: WorkflowContextStore
     @StateObject private var mgr = CoordinatorManager.shared
     @State private var commandText = ""
-    @State private var showAddSheet = false
     @State private var showModelManager = false
     @State private var showLMParams = false
     @State private var serverOnline = false
     @State private var startingServer = false
-    @FocusState private var commandFocused: Bool
+    @State private var selectedRunLogs: [LogLine] = []
+    @State private var selectedRunLogTask: Task<Void, Never>?
     @Namespace private var scroll
 
     var body: some View {
         VStack(spacing: 0) {
             // ── Header ──────────────────────────────────────────────────────
             headerBar
-
-            Divider()
-
-            // ── Coordinator cards ────────────────────────────────────────────
-            coordinatorRow
 
             Divider()
 
@@ -36,14 +32,17 @@ struct ControlPanelView: View {
             outputStream
         }
         .background(Color(NSColor.underPageBackgroundColor))
-        .navigationTitle("Control Panel")
-        .sheet(isPresented: $showAddSheet) {
-            AddCoordinatorSheet(isPresented: $showAddSheet)
-        }
+        .navigationTitle("Console")
         .sheet(isPresented: $showModelManager) {
             LMStudioManagerView()
         }
         .task { await pollServerStatus() }
+        .task(id: workflow.selectedRunId) {
+            bindSelectedRunLogs()
+        }
+        .onDisappear {
+            selectedRunLogTask?.cancel()
+        }
     }
 
     // MARK: - Server polling
@@ -56,7 +55,7 @@ struct ControlPanelView: View {
         }
     }
 
-    private func startA2AServer() {
+    private func startHarnessServer() {
         guard !startingServer else { return }
         startingServer = true
         mgr.addLine("⚡ Starting harness control-plane server…", level: .info)
@@ -70,6 +69,15 @@ struct ControlPanelView: View {
         }
     }
 
+    private func bindSelectedRunLogs() {
+        selectedRunLogTask?.cancel()
+        selectedRunLogs = []
+        guard let runId = workflow.selectedRunId, !runId.isEmpty else { return }
+        selectedRunLogTask = A2AClient.shared.streamLogs(runId: runId) { lines in
+            self.selectedRunLogs = lines
+        }
+    }
+
     // MARK: - Header bar
 
     private var headerBar: some View {
@@ -78,12 +86,18 @@ struct ControlPanelView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Coordinator Control")
+                Text("Coordinator Console")
                     .font(.system(size: 13, weight: .bold))
                 if let active = mgr.active {
-                    Text("Active: \(active.label)")
+                    Text("Planner selection: \(active.label)")
                         .font(.system(size: 10))
                         .foregroundColor(active.type.accentColor)
+                }
+                if let task = workflow.selectedTaskTitle {
+                    Text(task)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
@@ -102,7 +116,7 @@ struct ControlPanelView: View {
 
                 if !serverOnline {
                     Button(startingServer ? "Starting…" : "Start Server") {
-                        startA2AServer()
+                        startHarnessServer()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.mini)
@@ -134,64 +148,39 @@ struct ControlPanelView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 
-    // MARK: - Coordinator cards row
-
-    private var coordinatorRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(mgr.coordinators) { coord in
-                    CoordinatorCard(
-                        config: coord,
-                        isActive: coord.id == mgr.activeId
-                    ) {
-                        mgr.setActive(id: coord.id)
-                    } onDelete: {
-                        mgr.remove(id: coord.id)
-                    }
-                }
-
-                // Add button
-                Button {
-                    showAddSheet = true
-                } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.secondary.opacity(0.6))
-                        Text("Add")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.6))
-                    }
-                    .frame(width: 80, height: 88)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(white: 0.09))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color(white: 0.22).opacity(0.6),
-                                            style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
-                .help("Add coordinator")
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .frame(height: 112)
-        .background(Color(NSColor.windowBackgroundColor))
-    }
-
     // MARK: - Command input
 
     private var commandSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            workerRoutingRow
-            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Use the Planner tab to choose the coordinating LLM, set sub-agent model and team behavior, and launch kanban tasks. This console is for manual prompts and live coordinator output.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
 
-            // LM Studio params row — collapsible
+                if workflow.hasSelection {
+                    HStack(spacing: 8) {
+                        if let runId = workflow.selectedRunId, !runId.isEmpty {
+                            Label(String(runId.prefix(12)), systemImage: "waveform.path.ecg")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let runtime = workflow.selectedRuntime, !runtime.isEmpty {
+                            Text(runtime)
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12), in: Capsule())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+
             if mgr.active?.type == .lmStudio {
+                Divider()
                 lmParamsRow
                 Divider()
             }
@@ -206,8 +195,9 @@ struct ControlPanelView: View {
                 HStack(alignment: .bottom, spacing: 10) {
                     // CommandTextEditor handles ⌘↵ at the AppKit level
                     CommandTextEditor(text: $commandText, onSubmit: runCommand,
-                                      placeholder: "Type a task or command…",
-                                      submitOnCommandReturn: true)
+                                      placeholder: "Send a manual prompt to the coordinator selected in Planner…",
+                                      submitOnCommandReturn: true,
+                                      autoFocus: true)
                         .frame(minHeight: 72, maxHeight: 120)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -238,172 +228,6 @@ struct ControlPanelView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    // MARK: - Worker routing controls
-
-    private var workerRoutingRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Worker Routing")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Backend")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Picker("", selection: $mgr.runtimeSettings.workerBackend) {
-                        Text("kimi-pool").tag("kimi-pool")
-                        Text("kimi-bridge-agent").tag("kimi-bridge-agent")
-                        Text("kimi-bridge-swarm").tag("kimi-bridge-swarm")
-                        Text("lm-studio").tag("lm-studio")
-                        Text("jcode-direct").tag("jcode-direct")
-                        Text("litellm-gateway").tag("litellm-gateway")
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Worker Model")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    TextField("kimi-3.5", text: $mgr.runtimeSettings.workerModel)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 11, design: .monospaced))
-                        .frame(minWidth: 200)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Dispatch Path")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    TextField("kimi-pool", text: $mgr.runtimeSettings.dispatchPath)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 11, design: .monospaced))
-                        .frame(minWidth: 180)
-                }
-            }
-            .padding(.horizontal, 16)
-
-            if isBridgeWorkerBackend {
-                VStack(alignment: .leading, spacing: 8) {
-                    if isBridgeSwarmBackend {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Agents")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                TextField("4", text: bridgeAgentsBinding)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .frame(width: 80)
-                            }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Strategy")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                Picker("", selection: $mgr.runtimeSettings.bridgeStrategy) {
-                                    Text("parallel").tag("parallel")
-                                    Text("sequential").tag("sequential")
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .frame(width: 120)
-                            }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Roles")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                TextField("planner, builder, reviewer", text: $mgr.runtimeSettings.bridgeRoles)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .frame(minWidth: 240)
-                            }
-                        }
-                    }
-
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Worktree")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                            TextField(".", text: $mgr.runtimeSettings.bridgeWorktree)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11, design: .monospaced))
-                                .frame(minWidth: 160)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Timeout (s)")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                            TextField("1800", text: bridgeTimeoutBinding)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11, design: .monospaced))
-                                .frame(width: 100)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Bridge Context")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        TextField("Optional extra context for spawned Kimi work", text: $mgr.runtimeSettings.bridgeContext, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
-                            .lineLimit(2...4)
-                            .font(.system(size: 11, design: .monospaced))
-                    }
-                }
-                .padding(.horizontal, 16)
-            } else if isUnsupportedWorkerBackend {
-                Text("This backend is visible for planning, but direct `lm-studio` and `jcode-direct` execution is not implemented in the harness control-plane yet.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 16)
-            }
-        }
-        .padding(.bottom, 10)
-        .background(Color(NSColor.controlBackgroundColor))
-    }
-
-    private var isBridgeWorkerBackend: Bool {
-        mgr.runtimeSettings.workerBackend == "kimi-bridge-agent" || mgr.runtimeSettings.workerBackend == "kimi-bridge-swarm"
-    }
-
-    private var isBridgeSwarmBackend: Bool {
-        mgr.runtimeSettings.workerBackend == "kimi-bridge-swarm"
-    }
-
-    private var isUnsupportedWorkerBackend: Bool {
-        mgr.runtimeSettings.workerBackend == "lm-studio" || mgr.runtimeSettings.workerBackend == "jcode-direct"
-    }
-
-    private var bridgeAgentsBinding: Binding<String> {
-        Binding(
-            get: { String(mgr.runtimeSettings.bridgeAgents) },
-            set: { newValue in
-                if let parsed = Int(newValue.trimmingCharacters(in: .whitespacesAndNewlines)), parsed > 0 {
-                    mgr.runtimeSettings.bridgeAgents = parsed
-                }
-            }
-        )
-    }
-
-    private var bridgeTimeoutBinding: Binding<String> {
-        Binding(
-            get: { String(mgr.runtimeSettings.bridgeTimeoutSeconds) },
-            set: { newValue in
-                if let parsed = Int(newValue.trimmingCharacters(in: .whitespacesAndNewlines)), parsed > 0 {
-                    mgr.runtimeSettings.bridgeTimeoutSeconds = parsed
-                }
-            }
-        )
     }
 
     // MARK: - LM Studio params row
@@ -482,7 +306,7 @@ struct ControlPanelView: View {
                             .padding(.top, 4)
                         CommandTextEditor(
                             text: $mgr.lmSettings.systemPromptOverride,
-                            placeholder: "Leave empty to use GGAS default…"
+                            placeholder: "Leave empty to use the harness default…"
                         )
                             .frame(height: 48)
                             .overlay(
@@ -504,7 +328,22 @@ struct ControlPanelView: View {
     private var outputStream: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 3) {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    if let runId = workflow.selectedRunId, !runId.isEmpty {
+                        consoleSectionHeader("Selected Run Feed · \(String(runId.prefix(12)))")
+                        if selectedRunLogs.isEmpty {
+                            Text("Waiting for run output…")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.5))
+                        } else {
+                            ForEach(selectedRunLogs) { line in
+                                LogLineRow(line: line)
+                                    .id(line.id)
+                            }
+                        }
+                    }
+
+                    consoleSectionHeader("Coordinator Output")
                     if mgr.outputLines.isEmpty {
                         Text("Awaiting command…")
                             .font(.system(size: 11, design: .monospaced))
@@ -526,6 +365,9 @@ struct ControlPanelView: View {
             .onChange(of: mgr.outputLines.count) { _, _ in
                 withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            .onChange(of: selectedRunLogs.count) { _, _ in
+                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
         }
         .background(Color(NSColor.underPageBackgroundColor))
     }
@@ -540,80 +382,20 @@ struct ControlPanelView: View {
     }
 }
 
-// MARK: - Coordinator Card
-
-private struct CoordinatorCard: View {
-    let config: CoordinatorConfig
-    let isActive: Bool
-    let onTap: () -> Void
-    let onDelete: () -> Void
-
-    @State private var hovered = false
+private struct ConsoleSectionHeader: View {
+    let title: String
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
-                // Top: type badge + active check
-                HStack(spacing: 5) {
-                    Image(systemName: config.type.icon)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(config.type.accentColor)
-                    Text(config.type.rawValue)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(config.type.accentColor)
-                    Spacer()
-                    if isActive {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(config.type.accentColor)
-                    }
-                }
-
-                // Label
-                Text(config.label)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.primary.opacity(0.85))
-                    .lineLimit(1)
-
-                Spacer()
-
-                // Status dot
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(config.isOnline ? Color(red: 0.0, green: 0.88, blue: 0.45) : Color(white: 0.35))
-                        .frame(width: 5, height: 5)
-                    Text(config.isOnline ? "Online" : "Offline")
-                        .font(.system(size: 9))
-                        .foregroundColor(config.isOnline ? Color(red: 0.0, green: 0.88, blue: 0.45) : .secondary)
-                }
-            }
-            .padding(10)
-            .frame(width: 130, height: 88, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(white: isActive ? 0.15 : (hovered ? 0.13 : 0.10)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(
-                                isActive
-                                    ? config.type.accentColor.opacity(0.70)
-                                    : Color(white: hovered ? 0.30 : 0.20),
-                                lineWidth: isActive ? 1.5 : 1
-                            )
-                    )
-            )
-            .animation(.easeOut(duration: 0.12), value: isActive)
-            .animation(.easeOut(duration: 0.12), value: hovered)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovered = $0 }
-        .contextMenu {
-            if !config.isBuiltIn {
-                Button("Remove", role: .destructive, action: onDelete)
-            }
-        }
-        .help(config.isBuiltIn ? config.label : "\(config.label) — right-click to remove")
+        Text(title.uppercased())
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .tracking(0.7)
+            .padding(.top, 2)
     }
+}
+
+private func consoleSectionHeader(_ title: String) -> some View {
+    ConsoleSectionHeader(title: title)
 }
 
 // MARK: - Output line row
@@ -779,8 +561,10 @@ struct AddCoordinatorSheet: View {
 
     private func prefill() {
         switch type {
+        case .codex:
+            label = "Codex"; endpoint = ""; selectedModelId = "gpt-5.3-codex"
         case .claude:
-            label = "Claude API"; endpoint = ""; selectedModelId = "claude-opus-4-5"
+            label = "Claude Code"; endpoint = ""; selectedModelId = "claude-opus-4-5"
         case .kimi:
             label = "Kimi Code"; endpoint = ""
             selectedModelId = ProcessInfo.processInfo.environment["KIMI_BINARY"] ?? "kimi"

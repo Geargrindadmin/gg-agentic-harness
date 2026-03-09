@@ -1,6 +1,7 @@
 // SwarmView.swift — Hierarchical swarm tree with right-side legend.
 // Bounce fix: pulse ring uses scaleEffect (visual only, no layout impact).
 
+import AppKit
 import SwiftUI
 
 // MARK: - Node position preference key
@@ -33,9 +34,10 @@ private extension Color {
 // MARK: - LLM identity (coordinator ring)
 
 private enum LLMType {
-    case claude, gemini, kimi, gpt, unknown
+    case codex, claude, gemini, kimi, gpt, unknown
     static func detect(_ l: String) -> LLMType {
         let s = l.lowercased()
+        if s.contains("codex")   { return .codex }
         if s.contains("claude")  { return .claude }
         if s.contains("gemini")  { return .gemini }
         if s.contains("kimi")    { return .kimi   }
@@ -44,6 +46,7 @@ private enum LLMType {
     }
     var ringColor: Color {
         switch self {
+        case .codex:   return Color(red: 0.19, green: 0.69, blue: 0.96)
         case .claude:  return Color(red: 0.68, green: 0.38, blue: 1.0)
         case .gemini:  return Color(red: 0.16, green: 0.55, blue: 0.96)
         case .kimi:    return Color(red: 0.0,  green: 0.88, blue: 0.45)
@@ -53,6 +56,7 @@ private enum LLMType {
     }
     var displayName: String {
         switch self {
+        case .codex: return "Codex"
         case .claude: return "Claude"
         case .gemini: return "Gemini"
         case .kimi:   return "Kimi"
@@ -168,6 +172,7 @@ struct SwarmView: View {
     // Delegate ALL polling to AgentMonitorService — this view is display-only (Phase 2)
     @ObservedObject private var monitor   = AgentMonitorService.shared
     @ObservedObject private var swarmModel = AgentSwarmModel.shared
+    @EnvironmentObject private var workflow: WorkflowContextStore
     @State private var currentSizes = SwarmSizes.base
     @State private var availableSize: CGSize = .zero
     @State private var graphMode = true   // Phase 5: true = topology graph, false = bubble tree
@@ -178,7 +183,13 @@ struct SwarmView: View {
     @State private var actionStatus: String?
 
     // Derived view data — computed from AgentMonitorService.busStatuses
-    private var busStatuses: [BusRunStatus] { monitor.busStatuses }
+    private var busStatuses: [BusRunStatus] {
+        if let selectedRunId = workflow.selectedRunId,
+           monitor.busStatuses.contains(where: { $0.runId == selectedRunId }) {
+            return monitor.busStatuses.filter { $0.runId == selectedRunId }
+        }
+        return monitor.busStatuses
+    }
 
     private var allWorkers: [(runId: String, agentId: String, status: AgentDotStatus)] {
         busStatuses.flatMap { run in
@@ -205,6 +216,16 @@ struct SwarmView: View {
     private var selectedWorker: (runId: String, agentId: String, worker: BusWorkerState)? {
         flattenedWorkers.first { $0.runId == selectedRunId && $0.agentId == selectedAgentId }
     }
+    private var selectedRunStatus: BusRunStatus? {
+        if let workflowRunId = workflow.selectedRunId,
+           let status = monitor.busStatuses.first(where: { $0.runId == workflowRunId }) {
+            return status
+        }
+        if let status = monitor.busStatuses.first(where: { $0.runId == selectedRunId }) {
+            return status
+        }
+        return monitor.busStatuses.first
+    }
     private var hasData: Bool {
         (!busStatuses.isEmpty && allWorkers.count > 0)
         || swarmModel.coordinatorStatus != .idle
@@ -226,6 +247,9 @@ struct SwarmView: View {
         .onChange(of: busStatuses.count) { _, _ in refreshSizes() }
         .onAppear { syncSelection() }
         .onChange(of: busStatuses.count) { _, _ in syncSelection() }
+        .onChange(of: workflow.selectedRunId) { _, _ in
+            syncSelection()
+        }
     }
 
 
@@ -378,7 +402,7 @@ struct SwarmView: View {
     private func drawCommLinks(ctx: inout GraphicsContext,
                                 pts: [String: CGPoint],
                                 links: [AgentLink]) {
-        let sh   = GraphicsContext.Shading.color(Color(red: 1.0, green: 0.22, blue: 0.22, opacity: 0.78))
+        let sh   = GraphicsContext.Shading.color(Color(red: 1.0, green: 0.32, blue: 0.18, opacity: 0.28))
         let dash = StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 4])
         for link in links {
             guard let a = resolveNodePoint(link.fromId, pts: pts),
@@ -398,7 +422,7 @@ struct SwarmView: View {
             Image(systemName: "point.3.connected.trianglepath.dotted")
                 .font(.system(size: 56)).foregroundColor(.secondary.opacity(0.28))
             Text("No active swarm").font(.title3.weight(.medium)).foregroundColor(.secondary)
-            Text("Spawn a Kimi swarm to watch agents appear here in real time")
+            Text("Launch a planner task with any sub-agent model to watch the swarm update in real time")
                 .font(.callout).foregroundColor(.secondary.opacity(0.52))
             Spacer()
         }
@@ -419,6 +443,17 @@ struct SwarmView: View {
             statBadge("Working",  AgentSwarmModel.shared.totalRunning, .dotRunning)
             statBadge("Finished", AgentSwarmModel.shared.totalDone,    .dotDone)
             statBadge("Failed",   AgentSwarmModel.shared.totalFailed,  .dotFailed)
+            if let task = workflow.selectedTaskTitle {
+                Divider().frame(height: 18)
+                Text(task)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                if let runId = workflow.selectedRunId, !runId.isEmpty {
+                    Text(String(runId.prefix(12)))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+            }
             Spacer()
             // Phase 5: graph mode toggle
             HStack(spacing: 1) {
@@ -458,6 +493,14 @@ struct SwarmView: View {
 
                 Divider().opacity(0.4)
 
+                runTelemetryPanel
+
+                Divider().opacity(0.4)
+
+                selectedWorkerTelemetryPanel
+
+                Divider().opacity(0.4)
+
                 // ── Node types ─────────────────────────────────────────
                 legendSection("Node Types")
                 legendNodeRow(size: 18, status: .running, label: "Coordinator",
@@ -480,6 +523,7 @@ struct SwarmView: View {
 
                 // ── Coordinator ring ───────────────────────────────────
                 legendSection("Coordinator Ring — LLM")
+                legendRingRow(Color(red: 0.19, green: 0.69, blue: 0.96),"Codex",   "OpenAI Codex")
                 legendRingRow(Color(red: 0.68, green: 0.38, blue: 1.0), "Claude",  "Anthropic")
                 legendRingRow(Color(red: 0.16, green: 0.55, blue: 0.96),"Gemini",  "Google")
                 legendRingRow(Color(red: 0.0,  green: 0.88, blue: 0.45),"Kimi",    "Moonshot AI")
@@ -543,6 +587,16 @@ struct SwarmView: View {
                     Text("Status: \(selected.worker.status)")
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
+                    if let runtime = selected.worker.runtime {
+                        Text("Runtime: \(runtime)")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
+                    if let persona = selected.worker.personaId {
+                        Text("Persona: \(persona)")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
                     if let task = selected.worker.currentTask, !task.isEmpty {
                         Text(task)
                             .font(.system(size: 9))
@@ -551,13 +605,27 @@ struct SwarmView: View {
                     }
                 }
 
-                TextField("Guidance", text: $guidanceText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 10))
+                CommandTextEditor(
+                    text: $guidanceText,
+                    placeholder: "Guidance for the selected worker…",
+                    font: .systemFont(ofSize: 11)
+                )
+                .frame(minHeight: 56, maxHeight: 84)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
+                )
 
-                TextField("Retask summary", text: $retaskText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 10))
+                CommandTextEditor(
+                    text: $retaskText,
+                    placeholder: "Retask summary…",
+                    font: .systemFont(ofSize: 11)
+                )
+                .frame(minHeight: 56, maxHeight: 84)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
+                )
 
                 Button("Send Guidance") {
                     Task {
@@ -648,6 +716,128 @@ struct SwarmView: View {
         }
     }
 
+    @ViewBuilder
+    private var runTelemetryPanel: some View {
+        legendSection("Run Telemetry")
+
+        if let telemetry = selectedRunStatus?.telemetry {
+            VStack(alignment: .leading, spacing: 8) {
+                telemetryMetricRow("Coordinator", telemetry.coordinatorRuntime)
+                telemetryMetricRow("Messages", "\(telemetry.totalMessages)")
+                telemetryMetricRow("Delegations", "\(telemetry.delegationCount)")
+                telemetryMetricRow("Workers", "\(telemetry.activeWorkers) active / \(telemetry.totalWorkers) total")
+                telemetryMetricRow("Governor", "\(telemetry.governorActiveWorkers)/\(telemetry.governorAllowedAgents) active")
+                if telemetry.governorQueuedWorkers > 0 {
+                    telemetryMetricRow("Queue", "\(telemetry.governorQueuedWorkers)")
+                }
+
+                if !telemetry.runtimeBreakdown.isEmpty {
+                    telemetryBreakdown(title: "Runtime Mix", items: telemetry.runtimeBreakdown)
+                }
+
+                if !telemetry.roleBreakdown.isEmpty {
+                    telemetryBreakdown(title: "Role Mix", items: telemetry.roleBreakdown)
+                }
+            }
+        } else {
+            Text("No run telemetry yet")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var selectedWorkerTelemetryPanel: some View {
+        legendSection("Selected Worker")
+
+        if let selected = selectedWorker {
+            VStack(alignment: .leading, spacing: 8) {
+                telemetryMetricRow("Agent", selected.agentId)
+                if let runtime = selected.worker.runtime {
+                    telemetryMetricRow("Runtime", runtime)
+                }
+                if let role = selected.worker.role {
+                    telemetryMetricRow("Role", role)
+                }
+                if let persona = selected.worker.personaId {
+                    telemetryMetricRow("Persona", persona)
+                }
+                if let transport = selected.worker.launchTransport {
+                    telemetryMetricRow("Launch", transport)
+                }
+                if let executionStatus = selected.worker.executionStatus {
+                    telemetryMetricRow("Execution", executionStatus)
+                }
+                telemetryMetricRow("Heartbeat", relativeHeartbeat(selected.worker.lastHeartbeat))
+                if let summary = selected.worker.lastSummary, !summary.isEmpty {
+                    Text(summary)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .lineLimit(4)
+                }
+                HStack(spacing: 8) {
+                    Button("View Worktree") {
+                        WorktreePanelController.shared.open(
+                            agentId: selected.agentId,
+                            worktreePath: selected.worker.worktreePath
+                                ?? "\(ProjectSettings.shared.projectRoot)/.agent/control-plane/worktrees/\(selected.runId)/\(selected.agentId)"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    if let worktreePath = selected.worker.worktreePath {
+                        Button("Reveal") {
+                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: worktreePath)])
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+        } else {
+            Text("Select a worker to inspect its runtime, persona, and worktree.")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private func telemetryMetricRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.secondary)
+                .frame(width: 72, alignment: .leading)
+            Text(value)
+                .font(.system(size: 10, design: .monospaced))
+                .lineLimit(1)
+            Spacer()
+        }
+    }
+
+    private func telemetryBreakdown(title: String, items: [TelemetryCount]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.secondary)
+            ForEach(items.prefix(4)) { item in
+                telemetryMetricRow(item.label, "\(item.count)")
+            }
+        }
+    }
+
+    private func relativeHeartbeat(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: iso) else {
+            return "Unknown"
+        }
+        let delta = max(0, Int(Date().timeIntervalSince(date)))
+        if delta < 60 {
+            return "\(delta)s ago"
+        }
+        return "\(delta / 60)m ago"
+    }
+
     private var workerSelectionBinding: Binding<String> {
         Binding(
             get: { "\(selectedRunId)|\(selectedAgentId)" },
@@ -668,6 +858,14 @@ struct SwarmView: View {
 
     private func syncSelection() {
         guard !flattenedWorkers.isEmpty else { return }
+        if let runId = workflow.selectedRunId,
+           let match = flattenedWorkers.first(where: { $0.runId == runId }) {
+            selectedRunId = match.runId
+            selectedAgentId = match.agentId
+            guidanceText = match.worker.currentTask ?? guidanceText
+            retaskText = retaskText.isEmpty ? (match.worker.currentTask ?? "") : retaskText
+            return
+        }
         if selectedWorker == nil {
             selectedRunId = flattenedWorkers[0].runId
             selectedAgentId = flattenedWorkers[0].agentId

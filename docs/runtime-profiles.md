@@ -79,9 +79,20 @@ Behavior:
 11. All worker spawn, queue, retry, retask, and terminate actions remain harness-controlled, even for Kimi. Kimi may request delegation, but the harness authorizes every child worker.
 12. The harness governor adopts the same safe-capacity formula exposed in the macOS app and uses it as a headless fallback for spawn limits.
 13. Dedicated worker worktrees live under `.agent/control-plane/worktrees/<runId>/<agentId>`.
-14. Restart Codex after codex activation so the active session loads the new repo-scoped MCP paths.
-15. `npm run harness:runtime-parity` should treat missing activation as a warning, not a repo wiring failure.
-16. Verified CGC smoke command: `npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer`.
+14. The macOS control surface exposes planner-selected coordinator runtime, planner-selected sub-agent runtime/team mode, `Agent Analytics`, and `Swarm` telemetry directly from the same control-plane run graph.
+15. `Swarm` telemetry includes coordinator runtime, runtime/role mix, delegation count, selected-worker runtime/persona/transport details, and worktree inspection.
+16. The Planner surface is split into three explicit decisions:
+   - `Coordinator`: the lead runtime that owns the run
+   - `Agent Team`: sub-agent runtime, topology, roles, and worktree options
+   - `Work Intent`: the task objective only
+17. `Work Intent` does not silently mutate the deployed team. Suggested role mixes may be applied explicitly from the Planner UI.
+18. The macOS control surface also exposes:
+   - `Replays`: local transcript replay rendering for Claude Code and Cursor sessions
+   - `Model Fit`: local `llmfit` hardware-fit recommendations with LM Studio handoff
+   - `Free Models`: provider and model catalog for free coding-model offerings
+19. Restart Codex after codex activation so the active session loads the new repo-scoped MCP paths.
+20. `npm run harness:runtime-parity` should treat missing activation as a warning, not a repo wiring failure.
+21. Verified CGC smoke command: `npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer`.
 
 ## Coordinator Selection
 

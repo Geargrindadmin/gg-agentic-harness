@@ -125,7 +125,7 @@ final class LMStudioEngine {
 
     // MARK: - Health
 
-    func ping(endpoint: String) async -> Bool {
+    func ping(endpoint: String, allowAutoStart: Bool = false) async -> Bool {
         let base = endpoint.isEmpty ? defaultEndpoint : endpoint
         guard let primary = URL(string: "\(base)/v1/models"),
               let fallback = URL(string: "\(base)/api/v0/models") else { return false }
@@ -138,14 +138,20 @@ final class LMStudioEngine {
         req.timeoutInterval = 2
         if (try? await URLSession.shared.data(for: req)) != nil { return true }
 
-        // Fallback: try to launch LM Studio app/daemon once, then retry quickly
-        if await ensureServerRunning(base: base) {
+        // Optional fallback: only auto-start LM Studio when an explicit operator action
+        // requests it. Passive health checks must stay side-effect free.
+        if allowAutoStart, await ensureServerRunning(base: base) {
             var retry = URLRequest(url: primary); retry.timeoutInterval = 2
             if (try? await URLSession.shared.data(for: retry)) != nil { return true }
             var retryFallback = URLRequest(url: fallback); retryFallback.timeoutInterval = 2
             if (try? await URLSession.shared.data(for: retryFallback)) != nil { return true }
         }
         return false
+    }
+
+    func startLocalServer(endpoint: String) async -> Bool {
+        let base = endpoint.isEmpty ? defaultEndpoint : endpoint
+        return await ensureServerRunning(base: base)
     }
 
     // MARK: - List models

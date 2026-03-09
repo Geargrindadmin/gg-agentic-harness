@@ -167,14 +167,21 @@ final class AgentMonitorService: ObservableObject {
                     progressPct: w.progressPct,
                     lastHeartbeat: w.lastHeartbeat,
                     currentTask: w.currentTask,
-                    worktreePath: nil
+                    worktreePath: nil,
+                    runtime: nil,
+                    role: nil,
+                    personaId: nil,
+                    launchTransport: nil,
+                    executionStatus: nil,
+                    lastSummary: nil
                 )
             }
             statuses.append(BusRunStatus(
                 runId: info.runId,
                 totalMessages: 0,
                 workers: workerMap,
-                activeLocks: [:]
+                activeLocks: [:],
+                telemetry: nil
             ))
         }
 
@@ -188,10 +195,6 @@ final class AgentMonitorService: ObservableObject {
     private func fetchSnapshot() async {
         do {
             let busRuns = try await A2AClient.shared.fetchBusRuns()
-            let now      = Date()
-            let cut30    = now.addingTimeInterval(-30 * 60)   // 30-min heartbeat window
-            let cut2     = now.addingTimeInterval(-2  * 60)   // 2-min post-completion grace
-            let iso      = ISO8601DateFormatter()
 
             var statuses: [BusRunStatus] = []
             for info in busRuns {
@@ -200,37 +203,14 @@ final class AgentMonitorService: ObservableObject {
                 }
             }
 
-            // Filter to visible runs (active workers in window)
-            let visible = statuses.filter { status in
-                let workers = status.workers.values
-                guard !workers.isEmpty else { return false }
-                let hasAnyRecent = workers.contains { w in
-                    guard let beat = Self.iso.date(from: w.lastHeartbeat) else { return false }
-                    return beat > cut30
-                }
-                guard hasAnyRecent else { return false }
-                let allDone = workers.allSatisfy { $0.status == "complete" || $0.status == "failed" }
-                if allDone {
-                    let latestBeat = workers.compactMap { Self.iso.date(from: $0.lastHeartbeat) }.max()
-                    if let last = latestBeat, last < cut2 { return false }
-                }
-                return true
-            }
+            let visible = visibleStatuses(from: statuses)
 
             // Comm links — incremental: only scan visible runs
             let visibleRunIds = Set(visible.map { $0.runId })
             var newLinks: [(from: String, to: String)] = []
             for run in busRuns where visibleRunIds.contains(run.runId) {
                 let links = (try? await A2AClient.shared.fetchBusMessages(runId: run.runId)) ?? []
-                var seen  = seenLinks[run.runId] ?? []
-                for lnk in links {
-                    let key = "\(lnk.from)→\(lnk.to)"
-                    if !seen.contains(key) {
-                        seen.insert(key)
-                        newLinks.append(lnk)
-                    }
-                }
-                seenLinks[run.runId] = seen
+                newLinks.append(contentsOf: mergeNewLinks(for: run.runId, links: links))
             }
             // Prune seenLinks for runs that are no longer visible (prevents unbounded growth)
             seenLinks = seenLinks.filter { visibleRunIds.contains($0.key) }
@@ -242,7 +222,12 @@ final class AgentMonitorService: ObservableObject {
 
             // Publish
             busStatuses = visible
-            if !newLinks.isEmpty { commLinks.append(contentsOf: newLinks) }
+            if !newLinks.isEmpty {
+                commLinks.append(contentsOf: newLinks)
+                for link in newLinks {
+                    AgentSwarmModel.shared.ingestAgentMsg(from: link.from, to: link.to)
+                }
+            }
             isConnected = true
             lastError = nil
 
@@ -262,6 +247,39 @@ final class AgentMonitorService: ObservableObject {
             isConnected = false
             lastError = error.localizedDescription
         }
+    }
+
+    func visibleStatuses(from statuses: [BusRunStatus], now: Date = Date()) -> [BusRunStatus] {
+        let cut30 = now.addingTimeInterval(-30 * 60)
+        let cut2 = now.addingTimeInterval(-2 * 60)
+
+        return statuses.filter { status in
+            let workers = status.workers.values
+            guard !workers.isEmpty else { return false }
+            let heartbeats = workers.compactMap { Self.iso.date(from: $0.lastHeartbeat) }
+            guard heartbeats.contains(where: { $0 > cut30 }) else { return false }
+
+            let allDone = workers.allSatisfy { $0.status == "complete" || $0.status == "failed" }
+            if allDone, let latestBeat = heartbeats.max(), latestBeat < cut2 {
+                return false
+            }
+            return true
+        }
+    }
+
+    func mergeNewLinks(for runId: String, links: [(from: String, to: String)]) -> [(from: String, to: String)] {
+        var seen = seenLinks[runId] ?? []
+        var newLinks: [(from: String, to: String)] = []
+
+        for link in links {
+            let key = "\(link.from)→\(link.to)"
+            if seen.insert(key).inserted {
+                newLinks.append(link)
+            }
+        }
+
+        seenLinks[runId] = seen
+        return newLinks
     }
 
     // MARK: - RunStore fallback (for older-style swarms not using message bus)

@@ -1,0 +1,154 @@
+/**
+ * Error types:
+ * - QUOTA_EXHAUSTED: Skip account until quota resets
+ * - RATE_LIMITED: Backoff, try another account
+ * - MODEL_CAPACITY: Server overloaded, retry after delay
+ * - SERVER_ERROR: Backoff, count toward circuit breaker
+ * - AUTH_ERROR: Disable account permanently
+ * - NETWORK_ERROR: Connection failure, try another
+ * - MODEL_NOT_FOUND: Provider does not have/serve this model; skip and try next account
+ * - UNKNOWN: Generic, no retry
+ */
+export const ErrorType = {
+  QUOTA_EXHAUSTED: 'QUOTA_EXHAUSTED',
+  RATE_LIMITED: 'RATE_LIMITED',
+  MODEL_CAPACITY: 'MODEL_CAPACITY',
+  SERVER_ERROR: 'SERVER_ERROR',
+  AUTH_ERROR: 'AUTH_ERROR',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  MODEL_NOT_FOUND: 'MODEL_NOT_FOUND',
+  UNKNOWN: 'UNKNOWN',
+}
+
+const QUOTA_KEYWORDS = ['quota', 'limit exceeded', 'billing', 'insufficient_quota', 'exceeded your']
+const CAPACITY_KEYWORDS = ['overloaded', 'capacity', 'busy', 'unavailable']
+/**
+ * Keywords that indicate a provider-level 404/410 means the model is not
+ * available on *this account/provider*, not a generic routing 404.
+ * These trigger rotation to the next provider rather than forwarding the error.
+ */
+const MODEL_NOT_FOUND_KEYWORDS = [
+  'model not found',
+  'inaccessible',
+  'not deployed',
+  'model is not available',
+  'model unavailable',
+  'no such model',
+]
+
+/**
+ * Classify the confidence level for a 429 response.
+ *
+ * Returns:
+ * - 'quota_exhaustion_likely' — body contains keywords indicating the account's quota is depleted
+ * - 'generic_rate_limit'      — plain rate-limit with no quota-specific signal (or non-429 status)
+ *
+ * @param {number} statusCode
+ * @param {string} body
+ * @param {Object} headers
+ * @returns {'quota_exhaustion_likely'|'generic_rate_limit'}
+ */
+export function rateLimitConfidence(statusCode, body, headers) {
+  if (statusCode !== 429) return 'generic_rate_limit'
+  const bodyLower = (body || '').toLowerCase()
+  const isQuota = QUOTA_KEYWORDS.some(kw => bodyLower.includes(kw))
+  return isQuota ? 'quota_exhaustion_likely' : 'generic_rate_limit'
+}
+
+/**
+ * Classify an HTTP error response.
+ * @param {number} statusCode - 0 for network errors
+ * @param {string} body - Response body text or error message
+ * @param {Object} headers - Response headers (lowercased keys)
+ * @returns {{ type: string, retryAfterSec: number|null, shouldRetry: boolean, skipAccount: boolean, rateLimitConfidence?: string }}
+ */
+export function classifyError(statusCode, body, headers) {
+  const bodyLower = (body || '').toLowerCase()
+  const retryAfter = headers?.['retry-after']
+  const retryAfterSec = retryAfter ? parseInt(retryAfter, 10) || null : null
+
+  // Network/connection errors
+  if (statusCode === 0 || statusCode === undefined) {
+    return { type: ErrorType.NETWORK_ERROR, retryAfterSec: 5, shouldRetry: true, skipAccount: false }
+  }
+
+  if (statusCode === 401 || statusCode === 403) {
+    return { type: ErrorType.AUTH_ERROR, retryAfterSec: null, shouldRetry: false, skipAccount: true }
+  }
+
+  // Provider-level 404/410: model not found / inaccessible / not deployed on this account.
+  // These are NOT generic routing 404s — they mean this specific provider doesn't serve
+  // the requested model. Rotate to the next account rather than forwarding the error.
+  if (statusCode === 404 || statusCode === 410) {
+    const isModelNotFound = MODEL_NOT_FOUND_KEYWORDS.some(kw => bodyLower.includes(kw))
+    if (isModelNotFound) {
+      return { type: ErrorType.MODEL_NOT_FOUND, retryAfterSec: null, shouldRetry: true, skipAccount: true }
+    }
+    // Generic 404 (wrong URL, endpoint not found, etc.) — not retryable
+    return { type: ErrorType.UNKNOWN, retryAfterSec: null, shouldRetry: false, skipAccount: false }
+  }
+
+  if (statusCode === 429) {
+    const isQuota = QUOTA_KEYWORDS.some(kw => bodyLower.includes(kw))
+    const confidence = isQuota ? 'quota_exhaustion_likely' : 'generic_rate_limit'
+    if (isQuota) {
+      return { type: ErrorType.QUOTA_EXHAUSTED, retryAfterSec, shouldRetry: true, skipAccount: true, rateLimitConfidence: confidence }
+    }
+    return { type: ErrorType.RATE_LIMITED, retryAfterSec, shouldRetry: true, skipAccount: false, rateLimitConfidence: confidence }
+  }
+
+  if (statusCode === 503 || statusCode === 502) {
+    return { type: ErrorType.MODEL_CAPACITY, retryAfterSec: retryAfterSec || 5, shouldRetry: true, skipAccount: false }
+  }
+
+  if (statusCode >= 500) {
+    return { type: ErrorType.SERVER_ERROR, retryAfterSec: retryAfterSec || 10, shouldRetry: true, skipAccount: false }
+  }
+
+  return { type: ErrorType.UNKNOWN, retryAfterSec: null, shouldRetry: false, skipAccount: false }
+}
+
+/**
+ * Circuit breaker: CLOSED → OPEN (after threshold failures) → HALF_OPEN (after cooldown) → CLOSED (on success) or → OPEN (on failure)
+ */
+export class CircuitBreaker {
+  constructor({ threshold = 5, cooldownMs = 60000 } = {}) {
+    this.threshold = threshold
+    this.cooldownMs = cooldownMs
+    this.consecutiveFailures = 0
+    this.openedAt = null
+    this.state = 'CLOSED'
+  }
+
+  recordFailure() {
+    this.consecutiveFailures++
+    if (this.consecutiveFailures >= this.threshold || this.state === 'HALF_OPEN') {
+      this.state = 'OPEN'
+      this.openedAt = Date.now()
+    }
+  }
+
+  recordSuccess() {
+    this.consecutiveFailures = 0
+    this.state = 'CLOSED'
+    this.openedAt = null
+  }
+
+  isOpen() {
+    if (this.state === 'CLOSED') return false
+    if (this.state === 'OPEN' && Date.now() - this.openedAt >= this.cooldownMs) {
+      this.state = 'HALF_OPEN'
+      return false
+    }
+    if (this.state === 'HALF_OPEN') return false
+    return true
+  }
+
+  isHalfOpen() { return this.state === 'HALF_OPEN' }
+
+  reset() {
+    this.consecutiveFailures = 0
+    this.state = 'CLOSED'
+    this.openedAt = null
+  }
+}

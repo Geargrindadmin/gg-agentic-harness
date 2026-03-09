@@ -1,6 +1,7 @@
 node_modules/
 **/node_modules/
 **/dist/
+.dist/
 .agent/runs/
 .agent/control-plane/
 docs/reports/*
@@ -10,3 +11,4 @@ docs/reports/*
 .DS_Store
 npm-debug.log*
 coverage/
+third-party/**/.git.vendored/

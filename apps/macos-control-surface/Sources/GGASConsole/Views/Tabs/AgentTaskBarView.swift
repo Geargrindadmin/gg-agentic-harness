@@ -139,9 +139,12 @@ struct AgentTaskBarView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .font(.caption)
-                TextField("Filter agents…", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.caption)
+                AppTextField(
+                    text: $searchText,
+                    placeholder: "Filter agents…",
+                    font: .systemFont(ofSize: 12)
+                )
+                .frame(height: 18)
             }
             .padding(6)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))

@@ -39,17 +39,30 @@ final class WorktreeViewModel: ObservableObject {
     let worktreePath: String
 
     private var pollTask: Task<Void, Never>?
-    private let session: URLSession = {
+    private let session: URLSession
+    private let controlPlaneAPIBaseURL: String
+
+    private static func makeDefaultSession() -> URLSession {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest  = 3
         cfg.timeoutIntervalForResource = 5
         return URLSession(configuration: cfg)
-    }()
+    }
 
-    init(agentId: String, worktreePath: String) {
+    init(
+        agentId: String,
+        worktreePath: String,
+        session: URLSession? = nil,
+        controlPlaneAPIBaseURL: String? = nil,
+        autoStart: Bool = true
+    ) {
         self.agentId = agentId
         self.worktreePath = worktreePath
-        startPolling()
+        self.session = session ?? WorktreeViewModel.makeDefaultSession()
+        self.controlPlaneAPIBaseURL = controlPlaneAPIBaseURL ?? ProjectSettings.shared.controlPlaneAPIBaseURL
+        if autoStart {
+            startPolling()
+        }
     }
 
     deinit { pollTask?.cancel() }
@@ -63,9 +76,9 @@ final class WorktreeViewModel: ObservableObject {
         }
     }
 
-    private func refresh() async {
+    func refresh() async {
         let encodedPath = worktreePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        guard let url = URL(string: "\(ProjectSettings.shared.controlPlaneAPIBaseURL)/worktree?path=\(encodedPath)") else { return }
+        guard let url = URL(string: "\(controlPlaneAPIBaseURL)/worktree?path=\(encodedPath)") else { return }
         do {
             let (data, resp) = try await session.data(from: url)
             if let http = resp as? HTTPURLResponse, http.statusCode == 404 {
@@ -380,7 +393,9 @@ final class WorktreePanelController {
         // Remove from map when closed
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification,
                                                object: panel, queue: .main) { [weak self] _ in
-            self?.panels.removeValue(forKey: agentId)
+            Task { @MainActor [weak self] in
+                self?.panels.removeValue(forKey: agentId)
+            }
         }
     }
 }

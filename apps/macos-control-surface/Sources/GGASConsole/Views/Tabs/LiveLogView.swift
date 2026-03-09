@@ -3,6 +3,7 @@
 import SwiftUI
 
 struct LiveLogView: View {
+    @EnvironmentObject private var workflow: WorkflowContextStore
     @State private var logs: [LogLine] = []
     @State private var filterLevel = "all"
     @State private var searchText = ""
@@ -51,8 +52,15 @@ struct LiveLogView: View {
         }
         .navigationTitle("Live Log")
         .task {
-            polling = A2AClient.shared.streamLogs { lines in
-                DispatchQueue.main.async { self.logs = lines }
+            polling?.cancel()
+            polling = A2AClient.shared.streamLogs(runId: workflow.selectedRunId) { lines in
+                self.logs = lines
+            }
+        }
+        .task(id: workflow.selectedRunId) {
+            polling?.cancel()
+            polling = A2AClient.shared.streamLogs(runId: workflow.selectedRunId) { lines in
+                self.logs = lines
             }
         }
         .onDisappear { polling?.cancel() }
@@ -70,6 +78,12 @@ struct LiveLogView: View {
 
             Spacer()
 
+            if let runId = workflow.selectedRunId, !runId.isEmpty {
+                Text(String(runId.prefix(12)))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
             Toggle(isOn: $autoscroll) { Text("Auto-scroll") }.toggleStyle(.switch)
 
             Button("Clear") { logs = [] }.buttonStyle(.borderless)
@@ -86,8 +100,8 @@ struct SearchField: View {
     var body: some View {
         HStack {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
+            AppTextField(text: $text, placeholder: placeholder)
+                .frame(height: 20)
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.borderless).foregroundStyle(.secondary)
@@ -112,11 +126,17 @@ struct LogLineRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Text(String(line.ts.suffix(12))).foregroundStyle(.tertiary).frame(width: 90, alignment: .leading)
+            Text(runLabel).foregroundStyle(.secondary).frame(width: 92, alignment: .leading)
             Text(line.level.uppercased()).foregroundStyle(levelColor).frame(width: 42, alignment: .leading)
             Text(line.msg).foregroundStyle(levelColor).textSelection(.enabled)
             Spacer()
         }
         .font(.system(size: 11, design: .monospaced))
         .padding(.vertical, 1)
+    }
+
+    private var runLabel: String {
+        guard let runId = line.runId, !runId.isEmpty else { return "—" }
+        return String(runId.prefix(12))
     }
 }

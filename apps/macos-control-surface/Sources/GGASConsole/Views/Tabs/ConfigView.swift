@@ -103,9 +103,9 @@ struct ConfigView: View {
     @StateObject private var keyStore     = APIKeyStore.shared
     @StateObject private var openClaw     = OpenClawService.shared
     @StateObject private var providerSvc  = ProviderDetectionService.shared
+    @State private var showAdvancedConfig = false
 
     @State private var a2aOnline      = false
-    @State private var webConsoleUp   = false
     @State private var plannerStoreExists  = false
     @State private var controlPlaneMeta: ControlPlaneMeta? = nil
     @State private var controlPlaneCompatibilityMessage: String? = nil
@@ -135,12 +135,9 @@ struct ConfigView: View {
             VStack(alignment: .leading, spacing: 16) {
                 servicesSection
                 apiKeysSection
-                openClawSection
-                aiProviderSection
-                mcpSection
-                integrationSection
                 prereqSection
                 endpointsSection
+                advancedSection
                 HStack {
                     Button("Refresh Status") { Task { await refresh() } }.buttonStyle(.bordered)
                     if checking { ProgressView().scaleEffect(0.7) }
@@ -159,7 +156,7 @@ struct ConfigView: View {
     // MARK: - Sections (extracted to satisfy Swift type-checker)
 
     @ViewBuilder private var servicesSection: some View {
-        GroupBox("Services") {
+        GroupBox("Harness Control Plane") {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
                     LaunchStateBadge(state: launcher.state)
@@ -195,20 +192,26 @@ struct ConfigView: View {
                         detail: controlPlaneCompatibilityMessage
                     )
                 }
-                ServerRow(name: "agent-console  :7070 (optional Web UI)", online: webConsoleUp,
-                          detail: webConsoleUp ? nil : "Optional surface; not required for the harness runtime")
                 ServerRow(name: "Planner Store    .agent/control-plane/server/planner.json", online: plannerStoreExists,
                           detail: plannerStoreExists ? nil : "Created automatically when the control-plane serves planner data")
                 HStack(spacing: 8) {
                     Text("Control-plane URL")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("http://127.0.0.1:7891", text: Binding(
-                        get: { ProjectSettings.shared.controlPlaneBaseURL },
-                        set: { ProjectSettings.shared.controlPlaneBaseURL = $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11, design: .monospaced))
+                    AppTextField(
+                        text: Binding(
+                            get: { ProjectSettings.shared.controlPlaneBaseURL },
+                            set: { ProjectSettings.shared.controlPlaneBaseURL = $0 }
+                        ),
+                        placeholder: "http://127.0.0.1:7891",
+                        font: .monospacedSystemFont(ofSize: 11, weight: .regular)
+                    )
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+                    )
                 }
             }.padding(4)
         }
@@ -218,12 +221,32 @@ struct ConfigView: View {
         IntegrationControlSurfaceView()
     }
 
+    @ViewBuilder private var advancedSection: some View {
+        DisclosureGroup(isExpanded: $showAdvancedConfig) {
+            VStack(alignment: .leading, spacing: 16) {
+                integrationSection
+                mcpSection
+                aiProviderSection
+                openClawSection
+            }
+            .padding(.top, 12)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Advanced Integrations")
+                    .font(.subheadline.weight(.semibold))
+                Text("Optional gateways, provider overrides, MCP catalog selection, and external messaging integrations.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     // MARK: - API Keys Section
 
     @ViewBuilder private var apiKeysSection: some View {
         GroupBox("API Keys") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Used by ClaudePool and KimiPool workers for autonomous task processing.\nKeys are stored in ~/.ggas/env.")
+                Text("Optional when the harness uses direct provider APIs instead of your local authenticated CLIs.\nKeys are stored in ~/.ggas/env.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Divider()
@@ -367,7 +390,7 @@ struct ConfigView: View {
     @ViewBuilder private var openClawSection: some View {
         GroupBox("OpenClaw Gateway") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Self-hosted messaging gateway for Telegram, WhatsApp, and Discord → AI agents.")
+                Text("Optional self-hosted messaging gateway for Telegram, WhatsApp, and Discord.")
                     .font(.caption).foregroundStyle(.secondary)
                 Divider()
                 HStack(spacing: 12) {
@@ -421,9 +444,9 @@ struct ConfigView: View {
     // MARK: - AI Provider Section
 
     @ViewBuilder private var aiProviderSection: some View {
-        GroupBox("AI Provider & Model") {
+        GroupBox("Optional jcode Model Overrides") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Detects credentials from jcode OAuth flows. Run jcode once to log in, then select your model here.")
+                Text("Only use this if you want to override model selection for jcode-backed provider flows. Coordinator selection happens in the Control tab.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Refresh Providers") { providerSvc.refresh() }
@@ -468,7 +491,7 @@ struct ConfigView: View {
                 if !providerSvc.selectedModel.isEmpty {
                     Divider()
                     HStack {
-                        Text("Active:").font(.caption.bold()).foregroundStyle(.secondary)
+                    Text("Override:").font(.caption.bold()).foregroundStyle(.secondary)
                         Text("\(providerSvc.selectedProvider?.displayName ?? "–") · \(providerSvc.selectedModel)")
                             .font(.system(size: 11, design: .monospaced))
                         Spacer()
@@ -480,48 +503,14 @@ struct ConfigView: View {
     }
 
     @ViewBuilder private var mcpSection: some View {
-        GroupBox("MCP + Runtime Services") {
+        GroupBox("MCP Tooling") {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Built-in").font(.caption.bold()).foregroundStyle(.secondary)
                 mcpRow("gg-control-plane-server", transport: ProjectSettings.shared.normalizedControlPlaneBaseURL, exposes: "HTTP runtime service")
                 mcpRow("gg-skills",               transport: "stdio only", exposes: nil)
-                mcpRow("gg-forge MCP",            transport: "stdio only", exposes: nil)
-                Text("The macOS app talks to the harness control-plane over HTTP. MCP tools remain stdio-based.")
+                Text("The macOS app talks to the harness control-plane over HTTP. MCP tools remain repo-managed and stdio-based.")
                     .font(.caption).foregroundStyle(.secondary).padding(.top, 2)
-
-                // ── Third-party (from Packages tab) ────────────────────────
-                let thirdParty = PackageRegistry.shared.packages
-                    .filter { !$0.installedFiles.mcpServers.isEmpty }
-                if !thirdParty.isEmpty {
-                    Divider()
-                    Text("Third-Party (via Package Manager)").font(.caption.bold()).foregroundStyle(.secondary)
-                    ForEach(thirdParty) { pkg in
-                        ForEach(pkg.installedFiles.mcpServers, id: \.self) { serverName in
-                            thirdPartyMCPRow(serverName: serverName, sourcePkg: pkg)
-                        }
-                    }
-                }
             }.padding(4)
-        }
-    }
-
-    @ViewBuilder
-    private func thirdPartyMCPRow(serverName: String, sourcePkg: GGASPackage) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "lock.fill")
-                .foregroundStyle(.green)
-                .font(.caption)
-            Text(serverName)
-                .font(.system(size: 11, design: .monospaced))
-            Text("stdio only")
-                .font(.caption2).foregroundStyle(.secondary)
-            Spacer()
-            Text("from \(sourcePkg.repo)")
-                .font(.caption2)
-                .foregroundStyle(.blue)
-                .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(Color.blue.opacity(0.1))
-                .clipShape(Capsule())
         }
     }
 
@@ -646,10 +635,6 @@ struct ConfigView: View {
                 envRow("Control Plane", ProjectSettings.shared.normalizedControlPlaneBaseURL)
                 envRow("Control Plane API", ProjectSettings.shared.controlPlaneAPIBaseURL)
                 envRow("Realtime",    "SSE via /api/events")
-                envRow("Web Console", "http://localhost:7070")
-                envRow("ZMQ Coord",   zmqCoordinator)
-                envRow("ZMQ Collect", zmqCollector)
-                envRow("ZMQ Peers",   zmqPeers)
                 envRow("Planner",     plannerStorePath.isEmpty ? "(project root not configured)" : plannerStorePath)
             }
             .font(.system(size: 12, design: .monospaced)).padding(4)
@@ -661,38 +646,19 @@ struct ConfigView: View {
     private func refresh() async {
         checking = true
         async let compatibility = A2AClient.shared.probeControlPlaneCompatibility()
-        async let web = checkPort(7070)
         async let cl  = shellVersion("claude")
         async let km  = shellVersion("kimi")
         async let nd  = shellVersion("node")
         async let npm = shellVersion("npm")
         let compatibilityResult = await compatibility
-        (webConsoleUp, claudeVersion, kimiVersion, nodeVersion, npmVersion) =
-            await (web, cl, km, nd, npm)
+        (claudeVersion, kimiVersion, nodeVersion, npmVersion) =
+            await (cl, km, nd, npm)
         a2aOnline = compatibilityResult.compatible
         controlPlaneMeta = compatibilityResult.meta
         controlPlaneCompatibilityMessage = compatibilityResult.message
         plannerStoreExists = !plannerStorePath.isEmpty && FileManager.default.fileExists(atPath: plannerStorePath)
         geminiKeySet  = ProcessInfo.processInfo.environment["GEMINI_API_KEY"] != nil
         checking = false
-    }
-
-    private var zmqCoordinator: String {
-        ProcessInfo.processInfo.environment["ZMQ_COORDINATOR_ENDPOINT"] ?? "ipc:///tmp/ggas/coordinator.ipc"
-    }
-
-    private var zmqCollector: String {
-        ProcessInfo.processInfo.environment["ZMQ_COLLECTOR_ENDPOINT"] ?? "ipc:///tmp/ggas/collector.ipc"
-    }
-
-    private var zmqPeers: String {
-        ProcessInfo.processInfo.environment["ZMQ_PEERS_ENDPOINT"] ?? "ipc:///tmp/ggas/peers.ipc"
-    }
-
-    private func checkPort(_ port: Int) async -> Bool {
-        guard let url = URL(string: "http://localhost:\(port)") else { return false }
-        var req = URLRequest(url: url); req.timeoutInterval = 2
-        return (try? await URLSession.ephemeral.data(for: req)) != nil
     }
 
     private func shellVersion(_ cmd: String) async -> String? {
@@ -740,8 +706,8 @@ struct ToolRow: View {
     let version: String?
     let installNote: String
     let docsURL: String
-    let onRecheck:   @Sendable () async -> Void
-    let onReinstall: @Sendable () async -> Void
+    let onRecheck:   () async -> Void
+    let onReinstall: () async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

@@ -8,15 +8,34 @@ final class A2AClient: ObservableObject {
 
     static let shared = A2AClient()
 
-    private var base: String { ProjectSettings.shared.controlPlaneAPIBaseURL }
-    private var controlPlaneBase: String { ProjectSettings.shared.normalizedControlPlaneBaseURL }
+    private var baseOverride: String?
+    private var controlPlaneBaseOverride: String?
 
-    private let session: URLSession = {
+    private var base: String { baseOverride ?? ProjectSettings.shared.controlPlaneAPIBaseURL }
+    private var controlPlaneBase: String { controlPlaneBaseOverride ?? ProjectSettings.shared.normalizedControlPlaneBaseURL }
+
+    private var session: URLSession = {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest  = 5
         cfg.timeoutIntervalForResource = 5
         return URLSession(configuration: cfg)
     }()
+
+    func configureForTesting(baseURL: String, session: URLSession) {
+        let trimmed = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        controlPlaneBaseOverride = trimmed
+        baseOverride = trimmed + "/api"
+        self.session = session
+    }
+
+    func resetTestingOverrides() {
+        controlPlaneBaseOverride = nil
+        baseOverride = nil
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 5
+        cfg.timeoutIntervalForResource = 5
+        session = URLSession(configuration: cfg)
+    }
 
     // MARK: - Bus Runs (message-bus native — primary data source for SwarmView)
 
@@ -134,25 +153,53 @@ final class A2AClient: ObservableObject {
 
     func streamLogs(runId: String? = nil, handler: @escaping ([LogLine]) -> Void) -> Task<Void, Never> {
         Task {
+            var lines: [LogLine] = []
+            var seen = Set<String>()
+
             while !Task.isCancelled {
-                if let lines = try? await fetchLogs(runId: runId) {
-                    handler(lines)
-                    // Feed swarm-signal lines into the dot-matrix model
-                    let swarmKeywords = ["SPAWN_MANAGER", "SPAWN_WORKER", "AGENT_DONE",
-                                        "AGENT_FAILED", "HANDOFF_READY", "SPAWN_COORDINATOR",
-                                        "AGENT_MSG", "WORKTREE_PATH"]
-                    let swarmLines = lines.filter { line in
-                        swarmKeywords.contains(where: { line.msg.contains($0) })
-                    }
-                    if !swarmLines.isEmpty {
-                        await MainActor.run {
-                            for line in swarmLines {
-                                AgentSwarmModel.shared.ingest(line: line.msg)
+                let streamPath = runId.map { "/task/\($0)/stream" } ?? "/logs/stream"
+                guard let url = apiURL(streamPath) else { break }
+                var req = URLRequest(url: url)
+                req.timeoutInterval = 0
+
+                do {
+                    let (bytes, _) = try await URLSession.shared.bytes(for: req)
+                    var buffer = ""
+
+                    for try await byte in bytes {
+                        guard let chunk = String(bytes: [byte], encoding: .utf8) else { continue }
+                        buffer += chunk
+
+                        if !buffer.hasSuffix("\n\n") {
+                            continue
+                        }
+
+                        let payloads = buffer
+                            .components(separatedBy: "\n")
+                            .filter { $0.hasPrefix("data: ") }
+                            .map { String($0.dropFirst(6)) }
+                        buffer = ""
+
+                        for payload in payloads {
+                            guard let logLine = decodeStreamedLogLine(payload, runId: runId) else { continue }
+                            if appendLogLine(logLine, into: &lines, seen: &seen) {
+                                handler(lines)
+                                ingestSwarmSignals(from: logLine)
                             }
                         }
                     }
+                } catch {
+                    if let fallback = try? await fetchLogs(runId: runId) {
+                        var changed = false
+                        for logLine in fallback {
+                            changed = appendLogLine(logLine, into: &lines, seen: &seen) || changed
+                        }
+                        if changed {
+                            handler(lines)
+                        }
+                    }
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
                 }
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
     }
@@ -167,6 +214,31 @@ final class A2AClient: ObservableObject {
         }
         let r: Response = try await get("/skill-stats")
         return r.stats ?? r.skills ?? []
+    }
+
+    func fetchAgentAnalytics() async throws -> (
+        summary: AgentAnalyticsSummary,
+        coordinators: [AgentAnalyticsMetric],
+        workerRuntimes: [AgentAnalyticsMetric],
+        personas: [AgentAnalyticsMetric],
+        roles: [AgentAnalyticsMetric]
+    ) {
+        struct Response: Codable {
+            let summary: AgentAnalyticsSummary
+            let coordinators: [AgentAnalyticsMetric]
+            let workerRuntimes: [AgentAnalyticsMetric]
+            let personas: [AgentAnalyticsMetric]
+            let roles: [AgentAnalyticsMetric]
+        }
+
+        let response: Response = try await get("/agent-analytics")
+        return (
+            summary: response.summary,
+            coordinators: response.coordinators,
+            workerRuntimes: response.workerRuntimes,
+            personas: response.personas,
+            roles: response.roles
+        )
     }
 
     // MARK: - Planner
@@ -326,6 +398,41 @@ final class A2AClient: ObservableObject {
 
     func fetchUsageSnapshot() async throws -> UsageSnapshotModel {
         try await get("/usage")
+    }
+
+    // MARK: - Replays
+
+    func fetchReplaySources() async throws -> [ReplaySourceModel] {
+        struct Response: Codable { let sources: [ReplaySourceModel] }
+        let response: Response = try await get("/replays/sources")
+        return response.sources
+    }
+
+    func fetchReplaySessions(limit: Int = 100) async throws -> [ReplaySessionModel] {
+        struct Response: Codable { let sessions: [ReplaySessionModel] }
+        let response: Response = try await get("/replays/sessions?limit=\(limit)")
+        return response.sessions
+    }
+
+    func renderReplay(path: String) async throws -> ReplayRenderModel {
+        struct Body: Codable { let path: String }
+        return try await post("/replays/render", body: Body(path: path))
+    }
+
+    // MARK: - Model fit
+
+    func fetchModelFitRecommendations(limit: Int = 12) async throws -> ModelFitSnapshotModel {
+        try await get("/model-fit/recommendations?limit=\(limit)")
+    }
+
+    func fetchModelFitSystem() async throws -> ModelFitSystemSnapshotModel {
+        try await get("/model-fit/system")
+    }
+
+    // MARK: - Free models
+
+    func fetchFreeModelsCatalog() async throws -> FreeModelsCatalogModel {
+        try await get("/free-models/catalog")
     }
 
     // MARK: - Integrations (LiteLLM / Observability / Quality / MCP catalog)
@@ -601,6 +708,69 @@ final class A2AClient: ObservableObject {
     }
 
     // MARK: - HTTP helpers
+
+    private struct LiveLogEnvelope: Decodable {
+        let line: LogLine
+    }
+
+    private struct TaskLogEnvelope: Decodable {
+        let line: String?
+        let logLine: LogLine?
+    }
+
+    private func decodeStreamedLogLine(_ payload: String, runId: String?) -> LogLine? {
+        guard let data = payload.data(using: .utf8) else { return nil }
+
+        if let runId {
+            if let envelope = try? JSONDecoder.ggasDecoder.decode(TaskLogEnvelope.self, from: data) {
+                if let logLine = envelope.logLine {
+                    return logLine
+                }
+                if let message = envelope.line {
+                    return LogLine(
+                        id: "\(runId)-\(message.hashValue)",
+                        ts: ISO8601DateFormatter().string(from: Date()),
+                        level: "info",
+                        msg: message,
+                        runId: runId
+                    )
+                }
+            }
+            return nil
+        }
+
+        return try? JSONDecoder.ggasDecoder.decode(LiveLogEnvelope.self, from: data).line
+    }
+
+    private func appendLogLine(_ line: LogLine, into lines: inout [LogLine], seen: inout Set<String>, limit: Int = 500) -> Bool {
+        guard !seen.contains(line.id) else { return false }
+        seen.insert(line.id)
+        lines.append(line)
+        if lines.count > limit {
+            let overflow = lines.count - limit
+            let removed = lines.prefix(overflow)
+            for entry in removed {
+                seen.remove(entry.id)
+            }
+            lines.removeFirst(overflow)
+        }
+        return true
+    }
+
+    private func ingestSwarmSignals(from line: LogLine) {
+        let swarmKeywords = [
+            "SPAWN_MANAGER",
+            "SPAWN_WORKER",
+            "AGENT_DONE",
+            "AGENT_FAILED",
+            "HANDOFF_READY",
+            "SPAWN_COORDINATOR",
+            "AGENT_MSG",
+            "WORKTREE_PATH"
+        ]
+        guard swarmKeywords.contains(where: { line.msg.contains($0) }) else { return }
+        AgentSwarmModel.shared.ingest(line: line.msg)
+    }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
         guard let url = apiURL(path) else { throw URLError(.badURL) }

@@ -55,8 +55,11 @@ struct IntegrationControlSurfaceView: View {
 
     private var liteLLMSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("LiteLLM Coordinator Gateway", systemImage: "point.3.connected.trianglepath.dotted")
+            Label("Optional LiteLLM Gateway", systemImage: "point.3.connected.trianglepath.dotted")
                 .font(.caption).foregroundStyle(.secondary)
+            Text("Use this only if you want the harness to route model calls through an external LiteLLM proxy. The harness does not require LiteLLM for normal local CLI-backed coordination.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Toggle("Enable LiteLLM coordination before worker dispatch", isOn: $settings.liteLLM.enabled)
                 .font(.caption)
             HStack(spacing: 10) {
@@ -243,20 +246,25 @@ struct IntegrationControlSurfaceView: View {
 
     private func setToolFlag(_ tool: String, enabled: Bool) {
         switch tool {
-        case "promptfoo": settings.qualityTools.tools.promptfoo = enabled
-        case "semgrep": settings.qualityTools.tools.semgrep = enabled
-        case "trivy": settings.qualityTools.tools.trivy = enabled
-        case "gitleaks": settings.qualityTools.tools.gitleaks = enabled
+        case "lint": settings.qualityTools.tools.lint = enabled
+        case "type-check": settings.qualityTools.tools.typeCheck = enabled
+        case "test": settings.qualityTools.tools.test = enabled
+        case "build": settings.qualityTools.tools.build = enabled
         default: break
         }
     }
 
     private func resetSelectedToolsFromSettings() {
         var selected = Set<String>()
-        if settings.qualityTools.tools.promptfoo { selected.insert("promptfoo") }
-        if settings.qualityTools.tools.semgrep { selected.insert("semgrep") }
-        if settings.qualityTools.tools.trivy { selected.insert("trivy") }
-        if settings.qualityTools.tools.gitleaks { selected.insert("gitleaks") }
+        if settings.qualityTools.tools.lint { selected.insert("lint") }
+        if settings.qualityTools.tools.typeCheck { selected.insert("type-check") }
+        if settings.qualityTools.tools.test { selected.insert("test") }
+        if settings.qualityTools.tools.build { selected.insert("build") }
+        if selected.isEmpty {
+            selected = ["lint", "test"]
+            settings.qualityTools.tools.lint = true
+            settings.qualityTools.tools.test = true
+        }
         selectedQualityTools = selected
     }
 
@@ -266,7 +274,7 @@ struct IntegrationControlSurfaceView: View {
         do {
             let loaded = try await A2AClient.shared.fetchIntegrationSettings()
             settings = loaded
-            selectedQualityTools = ["lint", "test"]
+            resetSelectedToolsFromSettings()
             await reloadCatalog()
             statusMessage = "Integration settings loaded"
         } catch {
@@ -363,7 +371,7 @@ struct IntegrationControlSurfaceView: View {
             ),
             qualityTools: .init(
                 defaultProjectRoot: fallbackRoot,
-                tools: .init(promptfoo: true, semgrep: true, trivy: true, gitleaks: true)
+                tools: .init(lint: true, typeCheck: false, test: true, build: false)
             ),
             mcpCatalog: .init(catalogPath: "", kimiConfigPath: fallbackRoot + "/.mcp.json", selectedServerIds: [])
         )

@@ -129,6 +129,21 @@ function providerUnavailable(id: string, name: string, summary: string): UsagePr
   };
 }
 
+function providerWarning(id: string, name: string, summary: string, error: unknown): UsageProviderSnapshot {
+  return {
+    id,
+    name,
+    status: 'warning',
+    plan: null,
+    summary,
+    source: null,
+    windows: [],
+    credits: null,
+    error: error instanceof Error ? error.message : String(error),
+    lastCheckedAt: nowIso()
+  };
+}
+
 function providerNeedsLogin(
   id: string,
   name: string,
@@ -453,7 +468,11 @@ async function probeCodex(): Promise<UsageProviderSnapshot> {
 }
 
 export async function collectUsageSnapshot(): Promise<UsageSnapshot> {
-  const providers = await Promise.all([probeClaude(), probeCodex(), probeKimi()]);
+  const providers = await Promise.all([
+    probeClaude().catch((error) => providerWarning('claude', 'Claude Code', 'Claude usage could not be loaded.', error)),
+    probeCodex().catch((error) => providerWarning('codex', 'Codex', 'Codex usage could not be loaded.', error)),
+    probeKimi().catch((error) => providerWarning('kimi', 'Kimi Code', 'Kimi usage could not be loaded.', error))
+  ]);
   return {
     generatedAt: nowIso(),
     providers

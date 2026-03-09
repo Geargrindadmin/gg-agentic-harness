@@ -97,12 +97,15 @@ final class AgentSwarmModel: ObservableObject {
         // Bootstrap coordinator on first call with any data
         if coordinatorStatus == .idle {
             coordinatorStatus = .running
-            coordinatorLabel  = "kimi"
+            coordinatorLabel  = statuses.first?.telemetry?.coordinatorRuntime ?? "coordinator"
         }
 
         // Process EVERY run (show all manager/worker nodes, not just active ones)
         for latest in statuses {
             guard !latest.workers.isEmpty else { continue }
+            if let coordinatorRuntime = latest.telemetry?.coordinatorRuntime, !coordinatorRuntime.isEmpty {
+                coordinatorLabel = coordinatorRuntime
+            }
 
             let mgId = latest.runId
             if managerIndex[mgId] == nil {

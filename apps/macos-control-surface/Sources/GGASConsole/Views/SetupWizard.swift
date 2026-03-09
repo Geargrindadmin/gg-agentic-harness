@@ -18,13 +18,13 @@ enum WizardStep: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .welcome:             return "Welcome to GearGrind Agentic System"
+        case .welcome:             return "Welcome to GG Agentic Harness"
         case .projectFolder:       return "Choose Your Project Folder"
         case .nodejs:              return "Install Node.js"
         case .claude:              return "Install Claude Code"
         case .kimi:                return "Install Kimi Code"
         case .apiKeys:             return "Enter API Keys"
-        case .setup:               return "Wire GGAS Project"
+        case .setup:               return "Wire Harness Project"
         case .installIntoProjects: return "Install into Other Projects"
         case .done:                return "You're all set!"
         }
@@ -105,7 +105,7 @@ final class SetupWizardVM: ObservableObject {
 
     // MARK: - Installation Steps
 
-    // MARK: Wire GGAS project (setup.sh)
+    // MARK: Wire Harness project (setup.sh)
 
     /// Runs kit/setup.sh --non-interactive in the project root.
     /// setup.sh handles:
@@ -144,7 +144,7 @@ final class SetupWizardVM: ObservableObject {
         let (ok, _) = await runShellScript(script)
         setupStatus = ok ? .success : .failed("setup.sh exited non-zero")
         if ok {
-            log("✓ GGAS project wired — MCP servers built, configs generated, constitution installed")
+            log("✓ Harness project wired — MCP servers built, configs generated, constitution installed")
         } else {
             log("⚠ setup.sh had errors — check logs above. You can skip and fix manually via Terminal.", error: true)
             log("  Tip: cd \(projectRoot) && bash kit/setup.sh --non-interactive", error: true)
@@ -201,7 +201,7 @@ final class SetupWizardVM: ObservableObject {
             let v = shellOutput("claude", "--version") ?? "installed"
             claudeStatus = .success
             log("✓ Claude Code already installed: \(v)")
-            log("→ Re-wiring GGAS MCP servers (verifying Claude knows about them)…")
+            log("→ Re-wiring harness MCP servers (verifying Claude knows about them)…")
             await rewireMCPServers()
             return
         }
@@ -233,12 +233,12 @@ final class SetupWizardVM: ObservableObject {
             } else {
                 log("✓ Claude Code installed — run 'claude' to log in with your Anthropic account")
             }
-            log("→ Wiring GGAS MCP servers into Claude…")
+            log("→ Wiring harness MCP servers into Claude…")
             await rewireMCPServers()
         }
     }
 
-    /// Re-registers all GGAS MCP servers with Claude CLI.
+    /// Re-registers all harness MCP servers with Claude CLI.
     /// Safe to run repeatedly — removes existing registration first to avoid duplicates.
     private func rewireMCPServers() async {
         await buildMCPServers()  // Gap 4 — ensure dist/ exists before registering
@@ -351,8 +351,8 @@ final class SetupWizardVM: ObservableObject {
             if !kimiInstallDir.isEmpty {
                 log("  Add \"\(kimiInstallDir)\" to your PATH to use 'kimi' globally")
             }
-            // Gap 2 — wire GGAS MCP servers into Kimi after fresh install
-            log("→ Wiring GGAS MCP servers into Kimi…")
+            // Gap 2 — wire harness MCP servers into Kimi after fresh install
+            log("→ Wiring harness MCP servers into Kimi…")
             await wireKimiMCP()
         }
     }
@@ -1106,7 +1106,7 @@ struct SetupWizardView: View {
         case .nodejs:              return "Node.js 20 LTS is required to run the harness control-plane and macOS control surface."
         case .claude:              return "Claude Code CLI is Anthropic's AI coding agent used to coordinate tasks."
         case .kimi:                return "Kimi Code 3.5 CLI is Moonshot AI's coding agent used for parallel swarms."
-        case .apiKeys:             return "API keys let GGAS run Claude and Kimi autonomously without any interactive login.\nYou can skip this and add keys later in Config → API Keys."
+        case .apiKeys:             return "API keys let the harness run Claude and Kimi autonomously without any interactive login.\nYou can skip this and add keys later in Config → API Keys."
         case .setup:               return "Building MCP servers, generating config files, and installing the agent constitution (CLAUDE.md, KIMI.md, AGENTS.md) into your project. Runs after Claude/Kimi installs to avoid overwriting MCP registrations."
         case .installIntoProjects: return "Optionally install the GearGrind agentic layer (skills, workflows, rules, GEMINI.md, .mcp.json) into other projects on this machine so they benefit from the same agent tooling."
         case .done:                return "All dependencies installed. Click Launch to start using GearGrind Agentic System."

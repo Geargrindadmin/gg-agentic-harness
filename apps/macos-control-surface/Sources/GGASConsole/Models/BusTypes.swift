@@ -88,6 +88,7 @@ struct BusRunStatus: Codable {
     let totalMessages: Int
     let workers: [String: BusWorkerState]   // agentId → state
     let activeLocks: [String: String]        // filepath → agentId
+    let telemetry: BusRunTelemetry?
 }
 
 struct BusWorkerState: Codable {
@@ -96,6 +97,38 @@ struct BusWorkerState: Codable {
     let lastHeartbeat: String
     let currentTask: String?
     let worktreePath: String?   // optional — reported when agent sets its working directory
+    let runtime: String?
+    let role: String?
+    let personaId: String?
+    let launchTransport: String?
+    let executionStatus: String?
+    let lastSummary: String?
+}
+
+struct BusRunTelemetry: Codable {
+    let coordinatorRuntime: String
+    let totalWorkers: Int
+    let activeWorkers: Int
+    let queuedWorkers: Int
+    let completedWorkers: Int
+    let failedWorkers: Int
+    let handoffReadyWorkers: Int
+    let activeLocks: Int
+    let totalMessages: Int
+    let delegationCount: Int
+    let runtimeBreakdown: [TelemetryCount]
+    let roleBreakdown: [TelemetryCount]
+    let governorAllowedAgents: Int
+    let governorActiveWorkers: Int
+    let governorQueuedWorkers: Int
+    let updatedAt: String
+}
+
+struct TelemetryCount: Codable, Identifiable {
+    var id: String { key }
+    let key: String
+    let label: String
+    let count: Int
 }
 
 // MARK: - Bus SSE message (event: bus_message) → BusMessage

@@ -21,15 +21,25 @@ This app was imported from the legacy `GearGrind-Agentic-System` repo. Some setu
 ## Build & Run
 
 ```bash
-cd apps/macos-control-surface
-swift build -c release
-./.build/release/GGHarnessControlSurface
+npm run macos:control-surface:bundle
+open apps/macos-control-surface/.dist/GGHarnessControlSurface.app
 ```
 
 Or open in Xcode:
 ```bash
 open Package.swift
 ```
+
+The app is designed around a planner-first workflow:
+- `Planner` is the primary launch surface and is organized as `Coordinator`, `Agent Team`, and `Work Intent`.
+- `Work Intent` changes the objective only; it does not silently rewrite the deployed team unless the user explicitly applies a suggested team.
+- `Swarm`, `Console`, and `Live Log` follow the currently selected planner task/run.
+- `Agent Analytics` reports coordinator usage, worker runtime mix, and persona invocation counts from the harness run graph.
+- `Swarm` exposes selected-run telemetry, selected-worker runtime/persona details, and direct worktree inspection.
+- `Replays` renders local Claude Code and Cursor transcript sessions into readable replay pages.
+- `Model Fit` uses local `llmfit` analysis to recommend which coding models fit the current machine and can hand off into the LM Studio browser.
+- `Free Models` exposes the vendored free-provider catalog and can hand off model searches into LM Studio.
+- the headless harness remains the source of truth; the mac app is an operator surface, not a separate control plane.
 
 ## Package as .dmg (distribute to teammates)
 
@@ -56,7 +66,7 @@ GGASConsoleApp.swift          @main entry point
 ├── ContentView.swift         NavigationSplitView + sidebar
 │
 ├── Services/
-│   ├── A2AClient.swift       REST client → gg-a2a-server :7891
+│   ├── A2AClient.swift       REST client → harness control-plane :7891
 │   └── ForgeStore.swift      GRDB reader → ~/.ggas/forge/forge.db
 │
 ├── Models/
@@ -69,6 +79,7 @@ GGASConsoleApp.swift          @main entry point
         ├── RunHistoryView.swift     GET /api/runs  (polls 5s)
         ├── LiveLogView.swift        GET /api/logs  (polls 2s)
         ├── SkillAnalyticsView.swift GET /api/skill-stats
+        ├── AgentAnalyticsView.swift GET /api/agent-analytics
         ├── DispatchView.swift       POST /api/dispatch
         ├── TraceView.swift          GET /api/runs/:id/trace
         ├── TasksView.swift          GRDB → tasks table
@@ -86,4 +97,4 @@ GGASConsoleApp.swift          @main entry point
 | GG Forge notes | ❌ | ✅ (GRDB read) |
 | DMG distributable | ❌ | ✅ |
 
-Both connect to the same `gg-a2a-server` backend — they're complementary, not replacements.
+Both connect to the same harness control-plane backend — they're complementary, not replacements.

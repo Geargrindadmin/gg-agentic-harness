@@ -154,6 +154,11 @@ final class CommandNSTextView: NSTextView {
         updatePlaceholderVisibility()
     }
 
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
+
     func updatePlaceholderVisibility() {
         placeholderLabel.font = self.font
         placeholderLabel.isHidden = !self.string.isEmpty

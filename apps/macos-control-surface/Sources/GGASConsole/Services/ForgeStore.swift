@@ -12,9 +12,13 @@ final class PlannerStore: ObservableObject {
     @Published var isAvailable = false
     @Published var isLoading = false
     @Published var lastError: String?
+    private var runEventTask: Task<Void, Never>?
 
-    init() {
-        refresh()
+    init(autoStart: Bool = true) {
+        if autoStart {
+            refresh()
+            startRunEventSync()
+        }
     }
 
     func refresh() {
@@ -98,6 +102,29 @@ final class PlannerStore: ObservableObject {
 
     var openTasks: [PlannerTask] {
         tasks.filter { $0.status == "todo" || $0.status == "in_progress" }
+    }
+
+    deinit {
+        runEventTask?.cancel()
+    }
+
+    private func startRunEventSync() {
+        guard runEventTask == nil else { return }
+        runEventTask = Task {
+            for await event in A2AClient.shared.subscribeRunEvents() {
+                if Task.isCancelled { break }
+                switch event.type {
+                case .runCreated, .runStarted, .runCompleted, .runFailed, .runCancelled:
+                    await reload()
+                case .snapshot:
+                    if !tasks.isEmpty {
+                        await reload()
+                    }
+                case .unknown:
+                    break
+                }
+            }
+        }
     }
 }
 
