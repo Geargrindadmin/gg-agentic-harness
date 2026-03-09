@@ -35,9 +35,12 @@ Produce a high-signal visual explainer artifact for technical communication.
 - changed files
 - validation outputs
 - risks and open decisions
+- run artifacts
+- explicit citations to local files or commands
 
 3. Build visual artifact:
 - use semantic sectioning
+- support `architecture`, `diff-review`, and `audit-recap` modes
 - add diagram/table components as needed
 - ensure light/dark readability and print-safe typography
 
@@ -45,6 +48,7 @@ Produce a high-signal visual explainer artifact for technical communication.
 - key decisions
 - findings
 - next actions
+- citation block for every major claim
 
 ## Constraints
 

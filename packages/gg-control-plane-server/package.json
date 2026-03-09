@@ -1,0 +1,25 @@
+{
+  "name": "@geargrind/gg-control-plane-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "gg-control-plane-server": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "node -e \"console.log('gg-control-plane-server: no tests yet')\""
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  }
+}

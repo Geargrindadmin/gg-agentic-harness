@@ -22,11 +22,22 @@
     "updatedAt": { "type": "string", "format": "date-time" },
     "status": { "type": "string", "enum": ["in_progress", "success", "failed"] },
     "runtimeProfile": { "type": "string", "enum": ["codex", "claude", "kimi"] },
+    "activeRuntime": { "type": "string", "enum": ["codex", "claude", "kimi"] },
     "classification": {
       "type": "string",
       "enum": ["SIMPLE", "TASK", "TASK_LITE", "DECISION", "CRITICAL"]
     },
     "taskSummary": { "type": "string" },
+    "contextSource": { "type": "string", "enum": ["", "standard", "codegraphcontext", "hybrid"] },
+    "integrationFlags": {
+      "type": "object",
+      "properties": {
+        "codeGraphContextMode": { "type": "string", "enum": ["", "off", "prefer", "hybrid", "required"] },
+        "promptImproverMode": { "type": "string", "enum": ["", "off", "auto", "force"] },
+        "hydraMode": { "type": "string", "enum": ["", "off", "shadow", "active"] }
+      },
+      "additionalProperties": false
+    },
     "promptVersion": { "type": "string", "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "workflowVersion": { "type": "string", "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "blueprintVersion": { "type": "string", "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
@@ -218,6 +229,146 @@
         "recordedAt": { "type": "string", "format": "date-time" }
       },
       "additionalProperties": false
+    },
+    "delegationDecisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "decisionId",
+          "runId",
+          "fromAgentId",
+          "requestedRuntime",
+          "requestedRole",
+          "personaId",
+          "taskSummary",
+          "classification",
+          "boardRequired",
+          "highRiskTerms",
+          "status",
+          "rationale",
+          "timestamp",
+          "spawnedAgentId"
+        ],
+        "properties": {
+          "decisionId": { "type": "string", "minLength": 1 },
+          "runId": { "type": "string", "minLength": 1 },
+          "fromAgentId": { "type": "string", "minLength": 1 },
+          "requestedRuntime": { "type": "string", "enum": ["codex", "claude", "kimi"] },
+          "requestedRole": { "type": "string", "minLength": 1 },
+          "personaId": { "type": "string", "minLength": 1 },
+          "taskSummary": { "type": "string" },
+          "classification": {
+            "type": "string",
+            "enum": ["SIMPLE", "TASK", "TASK_LITE", "DECISION", "CRITICAL"]
+          },
+          "boardRequired": { "type": "boolean" },
+          "highRiskTerms": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "status": { "type": "string", "enum": ["approved", "rejected"] },
+          "rationale": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "spawnedAgentId": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "delegationFailures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["decisionId", "fromAgentId", "requestedRuntime", "personaId", "reason", "timestamp"],
+        "properties": {
+          "decisionId": { "type": "string", "minLength": 1 },
+          "fromAgentId": { "type": "string", "minLength": 1 },
+          "requestedRuntime": { "type": "string", "enum": ["codex", "claude", "kimi"] },
+          "personaId": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "workerGraph": {
+      "type": "object",
+      "required": ["workers", "edges"],
+      "properties": {
+        "workers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["agentId", "runtime", "role", "personaId", "parentAgentId", "status"],
+            "properties": {
+              "agentId": { "type": "string", "minLength": 1 },
+              "runtime": { "type": "string", "enum": ["codex", "claude", "kimi"] },
+              "role": { "type": "string", "minLength": 1 },
+              "personaId": { "type": "string", "minLength": 1 },
+              "parentAgentId": { "type": ["string", "null"] },
+              "status": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["fromAgentId", "toAgentId", "relation"],
+            "properties": {
+              "fromAgentId": { "type": "string", "minLength": 1 },
+              "toAgentId": { "type": "string", "minLength": 1 },
+              "relation": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "messageBusHealth": {
+      "type": "object",
+      "required": ["status", "transport", "pendingMessages", "lastCursor"],
+      "properties": {
+        "status": { "type": "string", "enum": ["healthy", "degraded"] },
+        "transport": { "type": "string", "minLength": 1 },
+        "pendingMessages": { "type": "integer", "minimum": 0 },
+        "lastCursor": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "runtimeScorecards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "runtime",
+          "adapterMode",
+          "status",
+          "mcpServers",
+          "optionalMcpServers",
+          "disabledMcpServers"
+        ],
+        "properties": {
+          "runtime": { "type": "string", "enum": ["codex", "claude", "kimi"] },
+          "adapterMode": { "type": "string", "enum": ["host-activated", "contract-only", "provider-api"] },
+          "status": { "type": "string", "enum": ["available"] },
+          "mcpServers": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "optionalMcpServers": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "disabledMcpServers": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "rollback": {
       "type": ["object", "null"],

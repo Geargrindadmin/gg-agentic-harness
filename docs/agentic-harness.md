@@ -102,6 +102,8 @@ Runtime-adapter rule:
 2. Before a codex runtime session in a new repo, run `npm run harness:runtime:activate` (defaults to `--runtime codex`).
 3. `runtime-project-sync.mjs` supports `codex|claude|kimi` and routes activation/status by adapter capability.
 4. `npm run harness:runtime-parity` may warn if host activation has not been applied on the current machine, but the local repo install can still be structurally correct.
+5. Restart Codex after runtime activation so the active session reloads repo-scoped MCP changes for the selected repo.
+6. Optional `CodeGraphContext` pilot mode requires the host `cgc` CLI. Verified host install command: `uv tool install --python python3.13 codegraphcontext`.
 
 ---
 
@@ -112,8 +114,29 @@ Use these as command-level overlays when standard skill chains are not enough:
 | Workflow | Purpose | Typical Entry |
 | --- | --- | --- |
 | `paperclip-extracted` | Intake triage, capability routing, and explicit stage gates | `/go`, coordinator planning, architecture-heavy requests |
+| `prompt-improver` | Runtime-agnostic intake normalization packet for vague or underspecified objectives | `/go`, `paperclip-extracted`, coordinator intake |
 | `symphony-lite` | Single-task autonomous execution contract with strict terminal state | `/minion` one-shot implementation runs |
 | `visual-explainer` | Generate evidence-linked visual explanations for plans/diffs/audits | Handoffs, PR reviews, status updates |
+| `full-doc-update` | Post-task documentation synchronization and drift-prevention report | End of `/minion`, `/go`, and autonomous task completion |
+| `hydra-sidecar` | Feature-flagged sidecar advisory/delegation packet with dual-research gate | Optional routing recommendation for `/go` and `paperclip-extracted` |
+| `network-ai-pilot` | Shadow-first pilot workflow for optional Network-AI sidecar evaluation | Controlled addon evaluation without core-path replacement |
+
+---
+
+## Priority Integration Program (2026-03-08)
+
+Status legend: `implemented` = available now, `pilot` = optional controlled rollout, `planned` = approved but not yet merged.
+
+| Stream | Target | Status | Contract |
+| --- | --- | --- | --- |
+| Context quality | `CodeGraphContext` | implemented (pilot) | Optional context-source path with fallback to standard memory chain; host requires `cgc` CLI for live graph-backed context |
+| Reporting quality | `visual-explainer` upgrade | implemented | Evidence-linked architecture/diff/audit reports with citations and validation ingest |
+| Intake quality | Prompt-improver workflow | implemented | Runtime-agnostic objective normalization before execution routing |
+| Sidecar orchestration | `Hydra` | implemented (feature-flagged) | `off|shadow|active` sidecar mode with deterministic fallback and mandatory dual-research decision gate |
+| Addon sidecar candidate | `Network-AI` | pilot planned | Shadow-first evaluation workflow and reversible integration contract |
+
+Reference plan: `docs/plans/2026-03-08-priority-integrations-action-plan.md`.
+Reference assessment: `docs/assessments/2026-03-08-network-ai-assessment.md`.
 
 ---
 
@@ -200,6 +223,9 @@ bd create "Rollback needed: {task}" \
 - All directives written to `docs/PRD.md` before implementation begins
 - Unanimous vote (5-0) required for HIGH risk — any dissent → escalate to human
 - Majority vote (3-2+) acceptable for MEDIUM risk
+- Every decision packet must include:
+  - codebase evidence citations
+  - internet evidence citations with source dates
 
 ---
 

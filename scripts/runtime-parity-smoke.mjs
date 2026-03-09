@@ -276,13 +276,19 @@ function checkRuntimeRegistry() {
     const optional = registry?.profiles?.[profile]?.optional || [];
     return !optional.includes('claude-mem');
   });
+  const kimiExecution = registry?.profiles?.kimi?.execution || {};
+  const kimiExecutionOk =
+    kimiExecution.adapterMode === 'provider-api' &&
+    kimiExecution.defaultLaunchTransport === 'api-session';
 
   return {
-    status: missing.length ? 'fail' : 'pass',
+    status: missing.length || !kimiExecutionOk ? 'fail' : 'pass',
     id: 'runtime_registry',
     summary: missing.length
       ? `Runtime registry missing claude-mem optional on: ${missing.join(', ')}`
-      : 'Runtime registry exposes claude-mem parity for codex/claude/kimi',
+      : !kimiExecutionOk
+        ? 'Runtime registry is missing the Kimi provider-api execution contract'
+        : 'Runtime registry exposes claude-mem parity for codex/claude/kimi',
     detail: filePath
   };
 }
@@ -327,9 +333,9 @@ function checkKimiContract(expected) {
     status: expected ? 'pass' : 'warn',
     id: 'kimi_contract',
     summary: expected
-      ? 'Kimi can use the same claude-mem worker/server contract through the active runtime'
-      : 'Kimi contract is fallback-only because claude-mem server path is unavailable',
-    detail: 'Kimi currently relies on runtime contract + worker path, not a dedicated local client config'
+      ? 'Kimi can use the same claude-mem worker/server contract plus the harness Moonshot API adapter'
+      : 'Kimi provider adapter is available, but claude-mem parity is fallback-only because the worker/server path is unavailable',
+    detail: 'Kimi now uses a harness-owned provider-api adapter and preflight gate; no host config rewrite is required'
   };
 }
 

@@ -6,6 +6,13 @@ Use this guide to install the GGV3 harness into a different repository without r
 
 - Node.js >= 20
 - `gg` CLI scaffold built in the source harness repo
+- Optional live `CodeGraphContext` pilot: host `cgc` CLI installed with Python `3.10+` and preferably Python `3.12+` on macOS
+
+Verified host install command:
+
+```bash
+uv tool install --python python3.13 codegraphcontext
+```
 
 ## 1. Build the CLI in the source repo
 
@@ -39,6 +46,8 @@ node /absolute/path/to/gg-agentic-harness/packages/gg-cli/dist/index.js --projec
 
 For `--runtime codex`, this step updates `~/.codex/config.toml` and `~/.codex/mcp.json` so repo-scoped MCPs (`gg-skills`, `filesystem`) point at the target project instead of whichever repo was active previously.
 
+Restart Codex after activation so the active session reloads the updated repo-scoped MCP paths.
+
 ## 5. Verify target harness
 
 ```bash
@@ -49,6 +58,7 @@ node /absolute/path/to/gg-agentic-harness/packages/gg-cli/dist/index.js --projec
 npm run harness:runtime-parity
 npm run harness:persona:audit
 npm run harness:persona:benchmark
+npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer
 node scripts/persona-registry-resolve.mjs --prompt "document a portable harness rollout" --classification TASK --json
 ```
 
@@ -66,5 +76,7 @@ node scripts/persona-registry-resolve.mjs --prompt "document a portable harness 
 - Generated `PORTABLE_AGENTIC_SETUP.md` inside target includes exact next steps.
 - `portable verify` exercises prompt mirrors, package scripts, persona benchmark coverage, project-context freshness, and runtime parity structure before you trust a new install.
 - `portable verify` warns when the codex runtime adapter has not been activated for the target repo on the current machine.
-- `workflow run` has executable adapters for `paperclip-extracted`, `symphony-lite`, and `visual-explainer`.
+- `workflow run` has executable adapters for `go`, `paperclip-extracted`, `prompt-improver`, `symphony-lite`, `visual-explainer`, `full-doc-update`, and `hydra-sidecar`.
+- `CodeGraphContext` pilot mode requires the upstream `cgc` CLI on the host if you want live graph-backed context instead of the standard fallback path.
+- The verified smoke for that path is `npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer`, which should emit `contextSource: codegraphcontext` or `contextSource: hybrid`.
 - Portable installs now include `.agent/agents/`, `.agent/registry/persona-registry.json`, and `.agent/registry/persona-compounds.json` so new projects inherit deterministic persona routing on day one.

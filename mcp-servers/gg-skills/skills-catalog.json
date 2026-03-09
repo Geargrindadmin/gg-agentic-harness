@@ -1,7 +1,7 @@
 {
-  "generated": "2026-03-07T16:22:54.996Z",
+  "generated": "2026-03-08T23:50:36.424Z",
   "skillCount": 117,
-  "workflowCount": 38,
+  "workflowCount": 44,
   "skills": [
     {
       "slug": "ads",
@@ -764,12 +764,20 @@
       "description": "Execute plan in batches with review checkpoints"
     },
     {
+      "slug": "full-doc-update",
+      "description": "Post-task documentation synchronization workflow. Updates mandatory and impact-driven docs after code changes."
+    },
+    {
       "slug": "generate-project-context",
       "description": "Generate or refresh docs/project-context.md from the current repository and enforce BMAD-style project-context disciplin"
     },
     {
       "slug": "go",
       "description": "The single entry point to the Conductor system - state your goal and everything is handled automatically"
+    },
+    {
+      "slug": "hydra-sidecar",
+      "description": "Feature-flagged Hydra-inspired sidecar routing advisory with mandatory dual-research evidence gates."
     },
     {
       "slug": "loop-execution-evaluator",
@@ -796,6 +804,10 @@
       "description": "Autonomous out-loop coding agent. Traverses all 8 agentic layer nodes from prompt to validated PR, with explicit escalat"
     },
     {
+      "slug": "network-ai-pilot",
+      "description": "Pilot workflow for evaluating Network-AI as an optional sidecar in shadow-first mode"
+    },
+    {
       "slug": "orchestrate",
       "description": "Coordinate multiple agents for complex tasks. Use for multi-perspective analysis, comprehensive reviews, or tasks requir"
     },
@@ -808,6 +820,10 @@
       "description": "Dispatch multiple task-workers in parallel based on DAG dependencies."
     },
     {
+      "slug": "persona-dispatch",
+      "description": "Resolve the correct persona set for a task using the canonical registry before any sub-agent fanout."
+    },
+    {
       "slug": "phase-review",
       "description": "Run post-execution quality gate - verifies all deliverables before marking a track complete"
     },
@@ -818,6 +834,14 @@
     {
       "slug": "preview",
       "description": "Preview server start, stop, and status check. Local development server management."
+    },
+    {
+      "slug": "prompt-improver",
+      "description": "Runtime-agnostic intake workflow that normalizes vague objectives into actionable harness packets."
+    },
+    {
+      "slug": "runtime-parity-smoke",
+      "description": "Verify Codex, Claude, and Kimi share the same runtime parity contract before starting a serious run."
     },
     {
       "slug": "status",

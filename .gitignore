@@ -2,6 +2,7 @@ node_modules/
 **/node_modules/
 **/dist/
 .agent/runs/
+.agent/control-plane/
 docs/reports/*
 !docs/reports/.gitkeep
 **/__pycache__/

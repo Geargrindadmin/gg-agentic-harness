@@ -94,6 +94,11 @@ Before any specialist or sub-agent routing:
 
 Parse the user's goal from `$ARGUMENTS`:
 
+- If prompt-improver is enabled, normalize the goal first and carry forward:
+  - normalized objective
+  - constraints
+  - acceptance criteria
+  - risk flags
 - Identify the type (feature, bugfix, refactor, etc.)
 - Estimate complexity
 - Extract key requirements
@@ -150,6 +155,7 @@ The orchestrator will:
 On completion or terminal failure, finalize run artifact:
 
 ```bash
+gg workflow run full-doc-update "<task summary>"
 node scripts/agent-run-artifact.mjs complete --id go-{timestamp} --status <success|failed>
 # For TASK|TASK_LITE|DECISION: node scripts/gws-task.mjs sync-run --tasklist "$GWS_TASKLIST_ID" --run-id go-{timestamp} --title "<short task title>" --status completed
 ```
@@ -158,9 +164,12 @@ node scripts/agent-run-artifact.mjs complete --id go-{timestamp} --status <succe
 
 Route to specialized workflows when they match the goal shape:
 
+- `/prompt-improver <objective>` as the intake pre-step when the request is vague or intake normalization is forced.
 - `/paperclip-extracted <objective>` for objective-level delivery that needs explicit intake, routing, and stage gates.
 - `/symphony-lite <task>` for one isolated autonomous execution path with strict terminal states.
 - `/visual-explainer <subject>` when the deliverable includes architecture/diff/audit communication artifacts.
+- `/full-doc-update <task summary>` at task completion to produce documentation sync evidence.
+- `/hydra-sidecar <objective>` when feature-flagged sidecar routing is enabled and both codebase plus dated internet evidence exist.
 
 ## Escalation Points
 
@@ -205,7 +214,10 @@ User: /go Add a hello world API
 - `/conductor status` — Check current track progress
 - `/conductor new-track` — Create track manually (more control)
 - `/paperclip-extracted` — Gated objective routing and execution checklist
+- `/prompt-improver` — Runtime-agnostic intake normalization packet
 - `/symphony-lite` — Single-task autonomous run contract
 - `/visual-explainer` — Visual report generation workflow
+- `/full-doc-update` — Documentation sync and drift-prevention report
+- `/hydra-sidecar` — Feature-flagged sidecar advisory or delegated workflow recommendation
 - `conductor/workflow.md` — Full evaluate-loop documentation (repo-local copy)
 - `.agent/conductor-docs/workflow.md` — Authoritative workflow source

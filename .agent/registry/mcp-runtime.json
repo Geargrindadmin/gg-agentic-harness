@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-03-07",
+  "updated": "2026-03-09",
   "profiles": {
     "codex": {
       "description": "Primary Codex runtime profile for portable harness installs. Optional claude-mem parity plugin may extend this set.",
@@ -38,8 +38,14 @@
         "postgresql"
       ],
       "optional": [
-        "claude-mem"
-      ]
+        "claude-mem",
+        "CodeGraphContext"
+      ],
+      "execution": {
+        "adapterMode": "host-activated",
+        "defaultLaunchTransport": "background-terminal",
+        "provider": "local"
+      }
     },
     "claude": {
       "description": "Claude Code runtime profile. Optional plugins (for example claude-mem) may extend this set.",
@@ -69,11 +75,17 @@
         "time"
       ],
       "optional": [
-        "claude-mem"
-      ]
+        "claude-mem",
+        "CodeGraphContext"
+      ],
+      "execution": {
+        "adapterMode": "host-activated",
+        "defaultLaunchTransport": "background-terminal",
+        "provider": "local"
+      }
     },
     "kimi": {
-      "description": "Kimi model-provider runtime profile using the same MCP/tooling contract as codex.",
+      "description": "Kimi runtime profile using the same MCP/tooling contract as codex plus a harness-owned local CLI / Moonshot hybrid adapter.",
       "mcpServers": [
         "CodeLogic",
         "MongoDB",
@@ -109,8 +121,25 @@
         "postgresql"
       ],
       "optional": [
-        "claude-mem"
-      ]
+        "claude-mem",
+        "CodeGraphContext"
+      ],
+      "execution": {
+        "adapterMode": "host-activated",
+        "defaultLaunchTransport": "cli-session",
+        "provider": "local+moonshot",
+        "apiBaseUrl": "https://api.moonshot.ai/v1",
+        "chatCompletionsPath": "/chat/completions",
+        "apiKeyEnv": [
+          "MOONSHOT_API_KEY",
+          "KIMI_API_KEY"
+        ],
+        "model": "kimi-k2.5",
+        "preflight": {
+          "minCpuCores": 4,
+          "minTotalMemoryGb": 8
+        }
+      }
     }
   }
 }

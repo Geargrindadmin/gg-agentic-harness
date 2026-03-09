@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GG Agentic Harness - Priority Integration Architecture</title>
+  <style>
+    :root {
+      --bg: #0b1320;
+      --panel: #121d30;
+      --line: #2d4365;
+      --text: #e9f1ff;
+      --muted: #a9bbd7;
+      --ok: #7ee2b8;
+      --warn: #ffc66d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1200px 420px at 100% -10%, #1d2d4a 0%, transparent 60%),
+        radial-gradient(900px 360px at -10% 110%, #182844 0%, transparent 55%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.35;
+    }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 22px; }
+    .hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(125deg, #101a2c, #122038);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: 0.2px; }
+    .sub { color: var(--muted); font-size: 14px; margin: 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      background: #0f1727;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 12px;
+      overflow: hidden;
+    }
+    .span-12 { grid-column: span 12; }
+    .span-8 { grid-column: span 8; }
+    .span-4 { grid-column: span 4; }
+    .card h2 { margin: 0 0 8px; font-size: 16px; letter-spacing: 0.15px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    svg {
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0f1828;
+      display: block;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 7px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #14233b; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    @media (max-width: 1100px) {
+      .span-8, .span-4 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>GG Agentic Harness - Priority Integration Architecture</h1>
+      <p class="sub">Focused map for the active integration wave: CodeGraphContext, visual-explainer upgrade, prompt-improver intake, and Hydra sidecar.</p>
+      <div class="chips">
+        <span class="chip">Date: 2026-03-08</span>
+        <span class="chip">Scope: prioritized wave only</span>
+        <span class="chip">Safety default: fallback + feature flags</span>
+        <span class="chip">Decision: Hydra primary, Network-AI pilot</span>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card span-12">
+        <h2>Priority Integration Diagram</h2>
+        <svg viewBox="0 0 1480 650" role="img" aria-label="Priority integration architecture for gg-agentic-harness">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <polygon points="0,0 8,4 0,8" fill="#88a8d8"></polygon>
+            </marker>
+          </defs>
+
+          <rect x="30" y="30" width="250" height="70" rx="8" fill="#1e2e4a" stroke="#4c76b2"/>
+          <text x="155" y="58" text-anchor="middle" fill="#e9f2ff" font-size="13" font-weight="700">Operator and IDEs</text>
+          <text x="155" y="77" text-anchor="middle" fill="#aac1df" font-size="11">Codex, Claude, Kimi, gg CLI</text>
+
+          <rect x="325" y="30" width="240" height="70" rx="8" fill="#1f3249" stroke="#4e8fb0"/>
+          <text x="445" y="58" text-anchor="middle" fill="#e8f7ff" font-size="13" font-weight="700">Intake Layer</text>
+          <text x="445" y="77" text-anchor="middle" fill="#b0d1df" font-size="11">Prompt-improver workflow</text>
+
+          <rect x="610" y="30" width="320" height="70" rx="8" fill="#21384d" stroke="#4f95b8"/>
+          <text x="770" y="58" text-anchor="middle" fill="#e6f9ff" font-size="13" font-weight="700">Agentic Harness Core</text>
+          <text x="770" y="77" text-anchor="middle" fill="#b4d5e5" font-size="11">Conductor, 5-cycle, deterministic gates</text>
+
+          <rect x="975" y="30" width="230" height="70" rx="8" fill="#2d2f48" stroke="#7f79bf"/>
+          <text x="1090" y="58" text-anchor="middle" fill="#f1ecff" font-size="13" font-weight="700">Governance Layer</text>
+          <text x="1090" y="77" text-anchor="middle" fill="#cfc7f1" font-size="11">ADR, rules, run artifacts</text>
+
+          <rect x="1250" y="30" width="200" height="70" rx="8" fill="#2c3f2f" stroke="#62a57a"/>
+          <text x="1350" y="58" text-anchor="middle" fill="#ebfff0" font-size="13" font-weight="700">Workflow Layer</text>
+          <text x="1350" y="77" text-anchor="middle" fill="#b9dfc6" font-size="11">visual-explainer upgrade</text>
+
+          <rect x="570" y="155" width="400" height="120" rx="8" fill="#1d3446" stroke="#4f8eb3"/>
+          <text x="770" y="182" text-anchor="middle" fill="#e7f7ff" font-size="12" font-weight="700">Context Plane</text>
+          <text x="770" y="203" text-anchor="middle" fill="#b8d9e8" font-size="11">standard memory chain + optional CodeGraphContext pilot</text>
+          <text x="770" y="222" text-anchor="middle" fill="#b8d9e8" font-size="11">fallback required on tool failure</text>
+          <text x="770" y="241" text-anchor="middle" fill="#b8d9e8" font-size="11">context-source telemetry in run artifacts</text>
+
+          <rect x="260" y="320" width="470" height="150" rx="8" fill="#23324a" stroke="#5c7fb8"/>
+          <text x="495" y="347" text-anchor="middle" fill="#ebf1ff" font-size="12" font-weight="700">Native Execution</text>
+          <text x="495" y="368" text-anchor="middle" fill="#b7c7e5" font-size="11">Core harness remains decision owner</text>
+          <text x="495" y="387" text-anchor="middle" fill="#b7c7e5" font-size="11">quality gates always enforced</text>
+          <text x="495" y="406" text-anchor="middle" fill="#b7c7e5" font-size="11">no sidecar bypass allowed</text>
+
+          <rect x="790" y="320" width="430" height="150" rx="8" fill="#2f2c45" stroke="#8374be"/>
+          <text x="1005" y="347" text-anchor="middle" fill="#f2ecff" font-size="12" font-weight="700">Hydra Sidecar</text>
+          <text x="1005" y="368" text-anchor="middle" fill="#d4c9f2" font-size="11">Primary sidecar choice</text>
+          <text x="1005" y="387" text-anchor="middle" fill="#d4c9f2" font-size="11">feature-flagged: off | shadow | active</text>
+          <text x="1005" y="406" text-anchor="middle" fill="#d4c9f2" font-size="11">active mode still returns to deterministic gates</text>
+
+          <rect x="1240" y="320" width="210" height="150" rx="8" fill="#3a2d22" stroke="#b08c53"/>
+          <text x="1345" y="347" text-anchor="middle" fill="#fff3df" font-size="12" font-weight="700">Network-AI Addon</text>
+          <text x="1345" y="368" text-anchor="middle" fill="#e4cfa9" font-size="11">Secondary pilot lane</text>
+          <text x="1345" y="387" text-anchor="middle" fill="#e4cfa9" font-size="11">shadow-first evaluation</text>
+          <text x="1345" y="406" text-anchor="middle" fill="#e4cfa9" font-size="11">no core-path replacement yet</text>
+
+          <rect x="470" y="510" width="560" height="95" rx="8" fill="#2d2f48" stroke="#7f79bf"/>
+          <text x="750" y="537" text-anchor="middle" fill="#f1ecff" font-size="12" font-weight="700">Reporting Plane</text>
+          <text x="750" y="558" text-anchor="middle" fill="#cfc7f1" font-size="11">enhanced visual-explainer + docs/reports + run artifacts</text>
+          <text x="750" y="577" text-anchor="middle" fill="#cfc7f1" font-size="11">evidence-linked outputs for architecture, diff review, and audits</text>
+
+          <path d="M280 65 L325 65" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M565 65 L610 65" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M930 65 L975 65" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M1205 65 L1250 65" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M770 100 L770 155" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M770 275 L495 320" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M770 275 L1005 320" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M770 275 L1240 320" stroke="#89a9d8" stroke-width="2.0" marker-end="url(#arrow)" fill="none" stroke-dasharray="6 5"/>
+          <path d="M495 470 L750 510" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M1005 470 L750 510" stroke="#89a9d8" stroke-width="2.2" marker-end="url(#arrow)" fill="none"/>
+          <path d="M1240 470 L900 510" stroke="#89a9d8" stroke-width="2.0" marker-end="url(#arrow)" fill="none" stroke-dasharray="6 5"/>
+        </svg>
+        <p class="muted"><span class="ok">Solid links</span> are required flow. <span class="warn">Dashed links</span> are pilot/optional lanes.</p>
+      </section>
+
+      <section class="card span-8">
+        <h2>Priority Repository Mapping</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Repository</th>
+              <th>Slot</th>
+              <th>Mode</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>CodeGraphContext/CodeGraphContext</td><td>Context Plane</td><td>Optional pilot with fallback</td><td>Implemented (pilot)</td></tr>
+            <tr><td>nicobailon/visual-explainer</td><td>Reporting Plane</td><td>Evidence-linked adapter with citations</td><td>Implemented</td></tr>
+            <tr><td>severity1/claude-code-prompt-improver</td><td>Intake Layer</td><td>Runtime-agnostic intake workflow</td><td>Implemented</td></tr>
+            <tr><td>Geargrindadmin/Hydra</td><td>Execution Plane</td><td>Feature-flagged primary sidecar</td><td>Implemented</td></tr>
+            <tr><td>jovanSAPFIONEER/Network-AI</td><td>Execution governance addon</td><td>Shadow-first pilot lane</td><td>Secondary pilot</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card span-4">
+        <h2>Guardrails</h2>
+        <ol class="muted">
+          <li>Core deterministic gates remain mandatory.</li>
+          <li>All optional integrations fail closed to standard harness behavior.</li>
+          <li>Hydra sidecar defaults to <code>off</code> and is rolled out via <code>shadow</code> first.</li>
+          <li>Runtime parity and artifact traceability checks run at each phase gate.</li>
+        </ol>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

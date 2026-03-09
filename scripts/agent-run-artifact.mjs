@@ -4,7 +4,7 @@ import path from 'node:path';
 
 function usage() {
   console.error(
-    'Usage: node scripts/agent-run-artifact.mjs <init|gate|mcp|event|feedback|persona|complete> [--key value ...]'
+    'Usage: node scripts/agent-run-artifact.mjs <init|gate|mcp|event|feedback|persona|context|complete> [--key value ...]'
   );
   process.exit(2);
 }
@@ -43,6 +43,42 @@ function optionalArg(args, key, fallback = '') {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function parseIntegrationFlags(value) {
+  const flags = {
+    codeGraphContextMode: '',
+    promptImproverMode: '',
+    hydraMode: ''
+  };
+
+  if (!value) return flags;
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return flags;
+
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return {
+        codeGraphContextMode: parsed.codeGraphContextMode || '',
+        promptImproverMode: parsed.promptImproverMode || '',
+        hydraMode: parsed.hydraMode || ''
+      };
+    } catch {
+      return flags;
+    }
+  }
+
+  for (const pair of trimmed.split(',')) {
+    const [key, raw] = pair.split('=').map((item) => item.trim());
+    if (!key || !raw) continue;
+    if (key === 'codeGraphContextMode' || key === 'promptImproverMode' || key === 'hydraMode') {
+      flags[key] = raw;
+    }
+  }
+
+  return flags;
 }
 
 function runPath(runId) {
@@ -189,6 +225,8 @@ if (command === 'init') {
   const runtimeProfile = optionalArg(args, 'runtime', 'codex');
   const classification = optionalArg(args, 'classification', 'TASK');
   const taskSummary = optionalArg(args, 'summary', '');
+  const contextSource = optionalArg(args, 'context-source', '');
+  const integrationFlags = parseIntegrationFlags(optionalArg(args, 'integration-flags', ''));
   const promptVersion = optionalArg(args, 'prompt-version', '');
   const workflowVersion = optionalArg(args, 'workflow-version', '');
   const blueprintVersion = optionalArg(args, 'blueprint-version', '');
@@ -203,8 +241,11 @@ if (command === 'init') {
     updatedAt: now,
     status: 'in_progress',
     runtimeProfile,
+    activeRuntime: runtimeProfile,
     classification,
     taskSummary,
+    contextSource,
+    integrationFlags,
     promptVersion,
     workflowVersion,
     blueprintVersion,
@@ -220,10 +261,42 @@ if (command === 'init') {
       external: []
     },
     retries: [],
+    delegationDecisions: [],
+    delegationFailures: [],
+    workerGraph: {
+      workers: [],
+      edges: []
+    },
+    messageBusHealth: {
+      status: 'healthy',
+      transport: 'json-local',
+      pendingMessages: 0,
+      lastCursor: 0
+    },
+    runtimeScorecards: [],
     personaRouting: null,
     rollback: null
   };
 
+  writeRun(runId, artifact);
+  process.exit(0);
+}
+
+if (command === 'context') {
+  const runId = requireArg(args, 'id');
+  const contextSource = optionalArg(args, 'context-source', '');
+  const integrationFlags = parseIntegrationFlags(optionalArg(args, 'integration-flags', ''));
+
+  const artifact = readRun(runId);
+  if (contextSource) artifact.contextSource = contextSource;
+  artifact.integrationFlags = {
+    ...(artifact.integrationFlags || {
+      codeGraphContextMode: '',
+      promptImproverMode: '',
+      hydraMode: ''
+    }),
+    ...integrationFlags
+  };
   writeRun(runId, artifact);
   process.exit(0);
 }

@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GG Agentic Harness - Complete Process Diagram</title>
+  <style>
+    :root {
+      --bg: #0a111b;
+      --panel: #121c2a;
+      --panel-soft: #172437;
+      --line: #29425e;
+      --text: #eaf3ff;
+      --muted: #a8bbd4;
+      --blue: #5dc3ff;
+      --green: #7ee0aa;
+      --amber: #ffd27a;
+      --red: #ff9a95;
+      --violet: #bda8ff;
+      --teal: #61e4d8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      line-height: 1.35;
+      background:
+        radial-gradient(1100px 500px at 110% -10%, #1e2f48 0%, transparent 65%),
+        radial-gradient(900px 450px at -10% 110%, #1a2d47 0%, transparent 60%),
+        var(--bg);
+    }
+    .wrap {
+      max-width: 1720px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(120deg, #111b2b, #152238);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0; font-size: 30px; letter-spacing: 0.2px; }
+    .sub { margin-top: 6px; color: var(--muted); font-size: 14px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #101827;
+      padding: 4px 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 12px;
+      overflow: hidden;
+    }
+    .span-12 { grid-column: span 12; }
+    .span-8 { grid-column: span 8; }
+    .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
+    .card h2 { margin: 0 0 8px; font-size: 16px; }
+    .meta { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    svg {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0f1826;
+      display: block;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #15253b; }
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .role {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #142336;
+      padding: 10px;
+      min-height: 220px;
+    }
+    .role h3 { margin: 0 0 8px; font-size: 13px; }
+    .role ul { margin: 0; padding-left: 18px; }
+    .role li { margin: 3px 0; color: var(--muted); font-size: 12px; }
+    .list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .list .item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    code { color: #c5dcff; }
+    @media (max-width: 1300px) {
+      .span-8, .span-6, .span-4 { grid-column: span 12; }
+      .role-grid { grid-template-columns: 1fr; }
+      .list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>GG Agentic Harness - Complete Process Diagram</h1>
+      <p class="sub">Comprehensive system view: entrypoints, routing, personas, logic loops, deterministic gates, sidecars, tooling pipelines, and feedback hardening.</p>
+      <div class="chips">
+        <span class="chip">Canonical contract: <code>docs/agentic-harness.md</code></span>
+        <span class="chip">Workflow governance: <code>.agent/workflows/*.md</code></span>
+        <span class="chip">Personas: <code>.agent/registry/persona-registry.json</code></span>
+        <span class="chip">Compounds: <code>.agent/registry/persona-compounds.json</code></span>
+        <span class="chip">Runtime parity: <code>scripts/runtime-parity-smoke.mjs</code></span>
+        <span class="chip">Run artifacts: <code>.agent/runs/*.json</code></span>
+        <span class="chip">Priority wave: <code>CodeGraphContext</code> + <code>prompt-improver</code> + <code>Hydra</code></span>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card span-12">
+        <h2>End-to-End Process Swimlane</h2>
+        <svg viewBox="0 0 2100 1100" role="img" aria-label="Complete agentic harness process and loop diagram">
+          <defs>
+            <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+              <polygon points="0,0 9,4.5 0,9" fill="#8eb6ea"></polygon>
+            </marker>
+            <marker id="arrow-green" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+              <polygon points="0,0 9,4.5 0,9" fill="#70c696"></polygon>
+            </marker>
+          </defs>
+
+          <rect x="20" y="20" width="2060" height="1040" rx="12" fill="#0c1624" stroke="#2b4665" />
+
+          <rect x="40" y="60" width="2020" height="110" rx="10" fill="#122235" stroke="#35587c" />
+          <text x="52" y="84" fill="#8fc8ff" font-size="13" font-weight="700">Lane A: Intake + Context Priming</text>
+
+          <rect x="40" y="190" width="2020" height="170" rx="10" fill="#13263a" stroke="#3f6e93" />
+          <text x="52" y="214" fill="#95d3ff" font-size="13" font-weight="700">Lane B: Decision Governance + Persona Routing</text>
+
+          <rect x="40" y="380" width="2020" height="230" rx="10" fill="#1c2a2f" stroke="#457a66" />
+          <text x="52" y="404" fill="#9fe0bf" font-size="13" font-weight="700">Lane C: Execution Engine (5-Cycle + Sidecar)</text>
+
+          <rect x="40" y="630" width="2020" height="170" rx="10" fill="#2a2a22" stroke="#8b8050" />
+          <text x="52" y="654" fill="#ffe5a1" font-size="13" font-weight="700">Lane D: Verification + Docs + Ship</text>
+
+          <rect x="40" y="820" width="2020" height="220" rx="10" fill="#2c2029" stroke="#845d80" />
+          <text x="52" y="844" fill="#e8c0ff" font-size="13" font-weight="700">Lane E: Feedback Loops (Internal + External Hardening)</text>
+
+          <rect x="70" y="95" width="220" height="56" rx="8" fill="#1e3551" stroke="#5d97ca" />
+          <text x="180" y="118" text-anchor="middle" fill="#e8f3ff" font-size="13" font-weight="700">1. Entry Points</text>
+          <text x="180" y="136" text-anchor="middle" fill="#b8d0ea" font-size="11">/go, /minion, CLI, IDE runtime</text>
+
+          <rect x="320" y="95" width="220" height="56" rx="8" fill="#203957" stroke="#61a0d7" />
+          <text x="430" y="118" text-anchor="middle" fill="#ebf6ff" font-size="13" font-weight="700">2. Prompt Improver + Classifier</text>
+          <text x="430" y="136" text-anchor="middle" fill="#bdd6ed" font-size="11">normalize objective -> classify request</text>
+
+          <rect x="570" y="95" width="260" height="56" rx="8" fill="#213c5d" stroke="#64a4d9" />
+          <text x="700" y="118" text-anchor="middle" fill="#ebf7ff" font-size="13" font-weight="700">3. Runtime + Profile Selection</text>
+          <text x="700" y="136" text-anchor="middle" fill="#c0d9ef" font-size="11">codex | claude | kimi + parity profile</text>
+
+          <rect x="860" y="95" width="250" height="56" rx="8" fill="#224162" stroke="#67a8de" />
+          <text x="985" y="118" text-anchor="middle" fill="#ebf8ff" font-size="13" font-weight="700">4. Memory Prime</text>
+          <text x="985" y="136" text-anchor="middle" fill="#c1dbef" font-size="11">memory chain + optional CodeGraphContext pilot</text>
+
+          <rect x="1140" y="95" width="310" height="56" rx="8" fill="#274465" stroke="#73b2e2" />
+          <text x="1295" y="118" text-anchor="middle" fill="#edf9ff" font-size="13" font-weight="700">5. Project Context + Policy Load</text>
+          <text x="1295" y="136" text-anchor="middle" fill="#c8def1" font-size="11">project-context + rules + workflow overlays</text>
+
+          <rect x="1480" y="95" width="240" height="56" rx="8" fill="#2a486a" stroke="#78b8e6" />
+          <text x="1600" y="118" text-anchor="middle" fill="#edf9ff" font-size="13" font-weight="700">6. Persona Audit</text>
+          <text x="1600" y="136" text-anchor="middle" fill="#c8e0f3" font-size="11">audit + resolve + compound check</text>
+
+          <rect x="1748" y="95" width="280" height="56" rx="8" fill="#2d4e73" stroke="#82c0ea" />
+          <text x="1888" y="118" text-anchor="middle" fill="#f0fbff" font-size="13" font-weight="700">7. Run Artifact Init</text>
+          <text x="1888" y="136" text-anchor="middle" fill="#d0e7f4" font-size="11">classification + versions + risk tier</text>
+
+          <rect x="70" y="225" width="300" height="64" rx="8" fill="#2f2f4a" stroke="#7f81be" />
+          <text x="220" y="249" text-anchor="middle" fill="#f2efff" font-size="13" font-weight="700">8. Board Trigger Gate</text>
+          <text x="220" y="267" text-anchor="middle" fill="#cdc9ef" font-size="11">high-risk, cross-cutting, or architecture change</text>
+
+          <rect x="400" y="225" width="300" height="64" rx="8" fill="#3d2f2a" stroke="#b18376" />
+          <text x="550" y="249" text-anchor="middle" fill="#fff0ea" font-size="13" font-weight="700">9A. Codebase Research Phase</text>
+          <text x="550" y="267" text-anchor="middle" fill="#f0c5bb" font-size="11">repo evidence: files, patterns, constraints</text>
+
+          <rect x="730" y="225" width="300" height="64" rx="8" fill="#3f3626" stroke="#b39a5c" />
+          <text x="880" y="249" text-anchor="middle" fill="#fff7e6" font-size="13" font-weight="700">9B. Internet Research Phase</text>
+          <text x="880" y="267" text-anchor="middle" fill="#ead9ad" font-size="11">dated external evidence: standards/docs/advisories</text>
+
+          <rect x="1060" y="225" width="300" height="64" rx="8" fill="#2f3b28" stroke="#7da56b" />
+          <text x="1210" y="249" text-anchor="middle" fill="#eefde8" font-size="13" font-weight="700">10. Board Deliberation + Vote</text>
+          <text x="1210" y="267" text-anchor="middle" fill="#c9e4be" font-size="11">options, tradeoffs, consensus, directives</text>
+
+          <rect x="1390" y="225" width="300" height="64" rx="8" fill="#2c3f3d" stroke="#69aaa3" />
+          <text x="1540" y="249" text-anchor="middle" fill="#e9fffd" font-size="13" font-weight="700">11. ADR + PRD + Task Contracts</text>
+          <text x="1540" y="267" text-anchor="middle" fill="#c1e9e4" font-size="11">board decision persisted before execution</text>
+
+          <rect x="1720" y="225" width="308" height="64" rx="8" fill="#28454d" stroke="#63a3be" />
+          <text x="1874" y="249" text-anchor="middle" fill="#e9fbff" font-size="13" font-weight="700">12. Dispatch Plan Finalized</text>
+          <text x="1874" y="267" text-anchor="middle" fill="#bfe4ef" font-size="11">persona roles + claims + ownership boundaries</text>
+
+          <rect x="70" y="420" width="280" height="70" rx="8" fill="#2c4736" stroke="#6aac85" />
+          <text x="210" y="448" text-anchor="middle" fill="#e8fff0" font-size="13" font-weight="700">13. C1 Research + Architecture</text>
+          <text x="210" y="467" text-anchor="middle" fill="#bee5cb" font-size="11">plan + rollback + dependencies</text>
+
+          <rect x="380" y="420" width="280" height="70" rx="8" fill="#2c4b37" stroke="#70b48b" />
+          <text x="520" y="448" text-anchor="middle" fill="#e9fff1" font-size="13" font-weight="700">14. C2 Implementation</text>
+          <text x="520" y="467" text-anchor="middle" fill="#c1e9cf" font-size="11">typed, secure, minimal diff</text>
+
+          <rect x="690" y="420" width="280" height="70" rx="8" fill="#2d5039" stroke="#74bc90" />
+          <text x="830" y="448" text-anchor="middle" fill="#ebfff2" font-size="13" font-weight="700">15. C3 UI/UX Quality</text>
+          <text x="830" y="467" text-anchor="middle" fill="#c4ecd2" font-size="11">responsive, a11y, visual checks</text>
+
+          <rect x="1000" y="420" width="280" height="70" rx="8" fill="#31553c" stroke="#7ac295" />
+          <text x="1140" y="448" text-anchor="middle" fill="#ecfff3" font-size="13" font-weight="700">16. C4 Hardening</text>
+          <text x="1140" y="467" text-anchor="middle" fill="#c8eed5" font-size="11">perf, edge cases, reliability</text>
+
+          <rect x="1310" y="420" width="280" height="70" rx="8" fill="#365a40" stroke="#80c89b" />
+          <text x="1450" y="448" text-anchor="middle" fill="#edfff4" font-size="13" font-weight="700">17. Verification Gate</text>
+          <text x="1450" y="467" text-anchor="middle" fill="#cbedd8" font-size="11">tsc + lint + tests + review protocol</text>
+
+          <rect x="1620" y="420" width="408" height="70" rx="8" fill="#3a5f44" stroke="#86cea0" />
+          <text x="1824" y="448" text-anchor="middle" fill="#effff5" font-size="13" font-weight="700">18. Sidecar Advisory Plane (Hydra/Network-AI)</text>
+          <text x="1824" y="467" text-anchor="middle" fill="#cdeed9" font-size="11">off | shadow | active, never bypass deterministic ownership</text>
+
+          <rect x="1620" y="510" width="408" height="70" rx="8" fill="#2f3948" stroke="#8296ba" />
+          <text x="1824" y="538" text-anchor="middle" fill="#eef3ff" font-size="13" font-weight="700">18A. Sidecar Decision Gate</text>
+          <text x="1824" y="557" text-anchor="middle" fill="#c9d4eb" font-size="11">requires codebase + internet evidence or fail-closed</text>
+
+          <rect x="70" y="670" width="300" height="78" rx="8" fill="#4a3f24" stroke="#c4aa65" />
+          <text x="220" y="698" text-anchor="middle" fill="#fff5df" font-size="13" font-weight="700">19. Deterministic Gate Execution</text>
+          <text x="220" y="717" text-anchor="middle" fill="#ead9b0" font-size="11">npx tsc --noEmit -> lint -> tests -> security</text>
+
+          <rect x="400" y="670" width="300" height="78" rx="8" fill="#4e3f27" stroke="#caab6c" />
+          <text x="550" y="698" text-anchor="middle" fill="#fff5e1" font-size="13" font-weight="700">20. C5 Documentation Sync</text>
+          <text x="550" y="717" text-anchor="middle" fill="#ecdbb3" font-size="11">/full-doc-update + walkthrough + ADR links</text>
+
+          <rect x="730" y="670" width="300" height="78" rx="8" fill="#52412a" stroke="#cfb174" />
+          <text x="880" y="698" text-anchor="middle" fill="#fff6e3" font-size="13" font-weight="700">21. Beads + Remote Tasks Sync</text>
+          <text x="880" y="717" text-anchor="middle" fill="#eedeb8" font-size="11">bd close/sync + gws-task status mirror</text>
+
+          <rect x="1060" y="670" width="300" height="78" rx="8" fill="#58452d" stroke="#d3b77a" />
+          <text x="1210" y="698" text-anchor="middle" fill="#fff7e5" font-size="13" font-weight="700">22. Git Flow + Push Policy</text>
+          <text x="1210" y="717" text-anchor="middle" fill="#f0e0bc" font-size="11">pull --rebase -> push -> protected branch rules</text>
+
+          <rect x="1390" y="670" width="300" height="78" rx="8" fill="#5d4930" stroke="#d8bd81" />
+          <text x="1540" y="698" text-anchor="middle" fill="#fff8e7" font-size="13" font-weight="700">23. Completion Evidence</text>
+          <text x="1540" y="717" text-anchor="middle" fill="#f2e2bf" font-size="11">run artifact complete + verification proofs</text>
+
+          <rect x="1720" y="670" width="308" height="78" rx="8" fill="#644e35" stroke="#ddc288" />
+          <text x="1874" y="698" text-anchor="middle" fill="#fff9e9" font-size="13" font-weight="700">24. Release/PR Handoff</text>
+          <text x="1874" y="717" text-anchor="middle" fill="#f4e5c4" font-size="11">PR creation/review + deploy readiness</text>
+
+          <rect x="70" y="860" width="320" height="80" rx="8" fill="#4a2f44" stroke="#b17ca5" />
+          <text x="230" y="889" text-anchor="middle" fill="#ffe9fb" font-size="13" font-weight="700">25. Internal Failure Loop</text>
+          <text x="230" y="908" text-anchor="middle" fill="#e9c3de" font-size="11">signature normalization + bounded retries (1s/2s/4s)</text>
+
+          <rect x="420" y="860" width="320" height="80" rx="8" fill="#4e3248" stroke="#b885ab" />
+          <text x="580" y="889" text-anchor="middle" fill="#ffeafb" font-size="13" font-weight="700">26. Recurring Failure Gate</text>
+          <text x="580" y="908" text-anchor="middle" fill="#ecc9e2" font-size="11">same signature threshold -> hardening evidence</text>
+
+          <rect x="770" y="860" width="320" height="80" rx="8" fill="#53364d" stroke="#bf8eb0" />
+          <text x="930" y="889" text-anchor="middle" fill="#ffebfc" font-size="13" font-weight="700">27. External Trend Scan</text>
+          <text x="930" y="908" text-anchor="middle" fill="#efcee5" font-size="11">feedback-loop-report over recent run artifacts</text>
+
+          <rect x="1120" y="860" width="320" height="80" rx="8" fill="#583b52" stroke="#c797b7" />
+          <text x="1280" y="889" text-anchor="middle" fill="#ffecfd" font-size="13" font-weight="700">28. Hardening Proposal</text>
+          <text x="1280" y="908" text-anchor="middle" fill="#f2d3e8" font-size="11">skill/rule/workflow/persona upgrade proposal</text>
+
+          <rect x="1470" y="860" width="280" height="80" rx="8" fill="#5e4057" stroke="#ce9fbd" />
+          <text x="1610" y="889" text-anchor="middle" fill="#ffedfd" font-size="13" font-weight="700">29. Board Approval</text>
+          <text x="1610" y="908" text-anchor="middle" fill="#f4d9ea" font-size="11">vote + ADR + contract update</text>
+
+          <rect x="1780" y="860" width="248" height="80" rx="8" fill="#65465f" stroke="#d6a8c3" />
+          <text x="1904" y="889" text-anchor="middle" fill="#ffeeff" font-size="13" font-weight="700">30. Next Run Improvement</text>
+          <text x="1904" y="908" text-anchor="middle" fill="#f7deed" font-size="11">feeds back into intake/classification</text>
+
+          <path d="M290 123 L320 123" stroke="#8eb6ea" stroke-width="2.4" marker-end="url(#arrow)" fill="none" />
+          <path d="M540 123 L570 123" stroke="#8eb6ea" stroke-width="2.4" marker-end="url(#arrow)" fill="none" />
+          <path d="M830 123 L860 123" stroke="#8eb6ea" stroke-width="2.4" marker-end="url(#arrow)" fill="none" />
+          <path d="M1110 123 L1140 123" stroke="#8eb6ea" stroke-width="2.4" marker-end="url(#arrow)" fill="none" />
+          <path d="M1450 123 L1480 123" stroke="#8eb6ea" stroke-width="2.4" marker-end="url(#arrow)" fill="none" />
+          <path d="M1720 123 L1748 123" stroke="#8eb6ea" stroke-width="2.4" marker-end="url(#arrow)" fill="none" />
+
+          <path d="M1888 151 L1888 225" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M370 257 L400 257" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M700 257 L730 257" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1030 257 L1060 257" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1360 257 L1390 257" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1690 257 L1720 257" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+
+          <path d="M1874 289 L1824 420" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M350 455 L380 455" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M660 455 L690 455" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M970 455 L1000 455" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1280 455 L1310 455" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1590 455 L1620 455" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1824 490 L1824 510" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+
+          <path d="M1824 580 L1824 670" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M370 709 L400 709" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M700 709 L730 709" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1030 709 L1060 709" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1360 709 L1390 709" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1690 709 L1720 709" stroke="#8eb6ea" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+
+          <path d="M220 748 L220 860" stroke="#c49cb8" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M390 900 L420 900" stroke="#c49cb8" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M740 900 L770 900" stroke="#c49cb8" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1090 900 L1120 900" stroke="#c49cb8" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1440 900 L1470 900" stroke="#c49cb8" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+          <path d="M1750 900 L1780 900" stroke="#c49cb8" stroke-width="2.2" marker-end="url(#arrow)" fill="none" />
+
+          <path d="M1904 940 L1904 1010 L180 1010 L180 151" stroke="#70c696" stroke-width="2.4" marker-end="url(#arrow-green)" fill="none" />
+          <text x="210" y="998" fill="#8cd1ab" font-size="12">closed-loop hardening feedback into intake</text>
+
+          <path d="M1824 510 L1540 289" stroke="#9ec6f0" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)" fill="none" />
+          <text x="1580" y="430" fill="#b7d9f7" font-size="11">shadow compare -> governance checkpoint</text>
+
+          <text x="402" y="300" fill="#f5c9be" font-size="11">dual research gate (mandatory before decision)</text>
+        </svg>
+        <p class="meta">Decision contract: Board and sidecar decisions require both codebase evidence and dated internet evidence before approval.</p>
+      </section>
+
+      <section class="card span-8">
+        <h2>Logic Loops Catalog</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Loop</th>
+              <th>Trigger</th>
+              <th>Cycle</th>
+              <th>Exit Condition</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>5-Cycle Delivery Loop</td>
+              <td>TASK/TASK_LITE execution</td>
+              <td>C1 research -> C2 implement -> C3 UI/UX -> C4 hardening -> C5 docs/ship</td>
+              <td>Verification gate pass + artifact completion</td>
+            </tr>
+            <tr>
+              <td>Board Decision Loop</td>
+              <td>boardRequired or high-risk architecture change</td>
+              <td>Codebase research -> Internet research -> Deliberation -> Vote -> ADR directives</td>
+              <td>Approved vote persisted to PRD/Task contracts</td>
+            </tr>
+            <tr>
+              <td>Deterministic Retry Loop</td>
+              <td>Gate failure (typecheck/lint/tests/security)</td>
+              <td>Normalize failure signature -> retry with backoff (1s/2s/4s)</td>
+              <td>Pass, or fail after 3 attempts and rollback</td>
+            </tr>
+            <tr>
+              <td>Sidecar Shadow Loop</td>
+              <td>Hydra/Network-AI enabled in shadow mode</td>
+              <td>Generate advisory route -> compare with native harness route</td>
+              <td>Mismatch report + governance checkpoint</td>
+            </tr>
+            <tr>
+              <td>Documentation Sync Loop</td>
+              <td>Task complete / major diff / governance change</td>
+              <td>Run <code>/full-doc-update</code> -> update PRD/walkthrough/README/ADR links</td>
+              <td>Docs parity validated and captured in run artifact</td>
+            </tr>
+            <tr>
+              <td>External Hardening Loop</td>
+              <td>Recurring signatures across recent runs</td>
+              <td>feedback-loop-report -> proposal -> board approval -> rule/workflow/persona update</td>
+              <td>Approved hardening integrated into next run baseline</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card span-4">
+        <h2>Workflow Overlays</h2>
+        <div class="list">
+          <div class="item"><strong>/go</strong><br />Coordinator orchestration and fanout</div>
+          <div class="item"><strong>/minion</strong><br />One-task autonomous run contract</div>
+          <div class="item"><strong>/board-meeting</strong><br />Directors deliberation + vote</div>
+          <div class="item"><strong>/paperclip-extracted</strong><br />Intake triage and stage gates</div>
+          <div class="item"><strong>/prompt-improver</strong><br />Objective normalization and intake packet</div>
+          <div class="item"><strong>/symphony-lite</strong><br />Execution handoff state machine</div>
+          <div class="item"><strong>/visual-explainer</strong><br />Evidence-linked architecture/diff artifacts</div>
+          <div class="item"><strong>/full-doc-update</strong><br />Post-task documentation parity sweep</div>
+          <div class="item"><strong>/hydra-sidecar</strong><br />Feature-flagged routing advisory/delegation packet</div>
+          <div class="item"><strong>/network-ai-pilot</strong><br />Shadow-first addon sidecar evaluation</div>
+        </div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Persona Topology (All Registered Personas)</h2>
+        <div id="persona-roles" class="role-grid"></div>
+      </section>
+
+      <section class="card span-6">
+        <h2>Compound Personas</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Compound</th>
+              <th>Primary</th>
+              <th>Collaborators</th>
+              <th>Risk</th>
+            </tr>
+          </thead>
+          <tbody id="compound-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Deterministic Tooling Process</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Process</th>
+              <th>Primary Commands</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Runtime parity</td>
+              <td><code>npm run harness:runtime-parity</code><br /><code>npm run harness:runtime:activate</code></td>
+              <td>Cross-runtime contract consistency</td>
+            </tr>
+            <tr>
+              <td>Project context</td>
+              <td><code>npm run harness:project-context</code><br /><code>npm run harness:project-context:check</code></td>
+              <td>Keep repo context current before planning/coding</td>
+            </tr>
+            <tr>
+              <td>Persona governance</td>
+              <td><code>npm run harness:persona:audit</code><br /><code>node scripts/persona-registry-resolve.mjs ...</code></td>
+              <td>Validated persona routing and compound selection</td>
+            </tr>
+            <tr>
+              <td>Run artifacts</td>
+              <td><code>node scripts/agent-run-artifact.mjs init|gate|event|persona|complete</code></td>
+              <td>Machine-readable traceability and evidence</td>
+            </tr>
+            <tr>
+              <td>Quality gates</td>
+              <td><code>npx tsc --noEmit</code><br /><code>npm run lint</code><br /><code>npm test</code></td>
+              <td>Deterministic correctness checks before ship</td>
+            </tr>
+            <tr>
+              <td>Feedback loop</td>
+              <td><code>node scripts/feedback-loop-report.mjs --window-days 7</code></td>
+              <td>Recurring-failure detection and hardening proposals</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>MCP Tooling Surface (Runtime Profiles)</h2>
+        <p class="meta">Codex, Claude, and Kimi use the same core MCP contract in this harness profile.</p>
+        <div id="mcp-list" class="list"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const personaRoles = {
+      coordinator: ["orchestrator"],
+      scout: ["code-archaeologist", "explorer-agent"],
+      planner: ["documentation-writer", "product-manager", "product-owner", "project-planner"],
+      builder: [
+        "backend-specialist",
+        "database-architect",
+        "debugger",
+        "devops-engineer",
+        "frontend-specialist",
+        "game-developer",
+        "mobile-developer",
+        "performance-optimizer",
+        "seo-specialist"
+      ],
+      reviewer: ["penetration-tester", "qa-automation-engineer", "security-auditor", "test-engineer"]
+    };
+
+    const compounds = [
+      {
+        id: "compound:auth-hardening:v1",
+        primary: "orchestrator",
+        collaborators: ["backend-specialist", "security-auditor", "test-engineer", "frontend-specialist"],
+        risk: "high"
+      },
+      {
+        id: "compound:payment-reliability:v1",
+        primary: "orchestrator",
+        collaborators: ["backend-specialist", "security-auditor", "database-architect", "test-engineer"],
+        risk: "high"
+      },
+      {
+        id: "compound:incident-hardening:v1",
+        primary: "orchestrator",
+        collaborators: ["debugger", "devops-engineer", "security-auditor", "test-engineer"],
+        risk: "high"
+      },
+      {
+        id: "compound:docs-governance:v1",
+        primary: "project-planner",
+        collaborators: ["documentation-writer", "product-manager", "orchestrator"],
+        risk: "medium"
+      }
+    ];
+
+    const mcpServers = [
+      "CodeLogic", "MongoDB", "Ref", "apify", "browser-use", "browserbase", "chrome-devtools", "codacy",
+      "context7", "docker", "everything", "exa", "filesystem", "gg-skills", "github",
+      "google-maps-platform-code-assist", "ide", "memory", "n8n-mcp", "sentry", "sequentialthinking", "stripe", "time"
+    ];
+
+    function titleCase(s) {
+      return s.split("-").map(x => x.charAt(0).toUpperCase() + x.slice(1)).join(" ");
+    }
+
+    const roleContainer = document.getElementById("persona-roles");
+    Object.entries(personaRoles).forEach(([role, members]) => {
+      const box = document.createElement("section");
+      box.className = "role";
+      const header = document.createElement("h3");
+      header.textContent = `${titleCase(role)} (${members.length})`;
+      const ul = document.createElement("ul");
+      members.forEach(id => {
+        const li = document.createElement("li");
+        li.textContent = id;
+        ul.appendChild(li);
+      });
+      box.appendChild(header);
+      box.appendChild(ul);
+      roleContainer.appendChild(box);
+    });
+
+    const compoundBody = document.getElementById("compound-body");
+    compounds.forEach(c => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${c.id}</td>
+        <td>${c.primary}</td>
+        <td>${c.collaborators.join(", ")}</td>
+        <td>${c.risk}</td>
+      `;
+      compoundBody.appendChild(tr);
+    });
+
+    const mcpList = document.getElementById("mcp-list");
+    mcpServers.forEach(name => {
+      const div = document.createElement("div");
+      div.className = "item";
+      div.textContent = name;
+      mcpList.appendChild(div);
+    });
+  </script>
+</body>
+</html>

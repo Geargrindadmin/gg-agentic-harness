@@ -27,9 +27,11 @@ Constraints: [Timeline, budget, technical limitations]
 Stakeholder: [Who requested this — main agent or sub-agent]
 ```
 
-### Step 2: Directors Research (MANDATORY)
+### Step 2: Directors Research (MANDATORY, TWO PHASES)
 
-Each director independently investigates before opining:
+Each director independently investigates before opining.
+
+Phase A — Codebase Evidence:
 
 | Director | Research Focus | Tools |
 |----------|---------------|-------|
@@ -39,7 +41,13 @@ Each director independently investigates before opining:
 | **COO** (Operations) | Deployment config, CI/CD, ops runbooks | `view_file` cloudbuild.yaml, Dockerfile |
 | **CXO** (Experience) | Design system, UI patterns, accessibility | `view_file` cyber-component-dev-guide.md |
 
-> 🔴 **Directors MUST cite specific files/patterns from their research.** No opinions without evidence.
+Phase B — Internet Evidence:
+
+- Each director must collect current external evidence relevant to their domain (standards, advisories, vendor docs, benchmarks, or compliance updates).
+- Every internet citation must include source and date.
+- If no high-signal external evidence exists, explicitly record "no relevant external delta found" with searched domains/queries.
+
+> 🔴 **Directors MUST cite both codebase files/patterns and internet sources from their research.** No opinions without evidence.
 
 ### Step 3: Brainstorm Options
 
@@ -61,6 +69,8 @@ Directors debate the options (2-3 rounds):
 **Round 1 — Initial Positions**: Each director states their preferred option and why.
 **Round 2 — Challenges**: Directors challenge each other's positions with evidence.
 **Round 3 — Convergence**: Directors identify common ground and final positions.
+
+> Gate: Deliberation cannot start until all 5 directors have submitted both codebase and internet evidence.
 
 ### Step 5: Vote
 

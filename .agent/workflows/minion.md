@@ -335,6 +335,7 @@ Use `.agent/registry/mcp-runtime.json` as the server source of truth.
 - `/paperclip-extracted` for intake + routing + gate-managed objective execution
 - `/symphony-lite` for strict one-task autonomous runs with `HANDOFF_READY`/`BLOCKED`
 - `/visual-explainer` to emit evidence-linked handoff artifacts for PR or stakeholder review
+- `/full-doc-update` to generate post-task documentation sync evidence
 
 ---
 
@@ -431,6 +432,7 @@ git push -u origin feature/{bead-id}
 ### 2.5 Finalize Run Artifact
 
 ```bash
+gg workflow run full-doc-update "{task}"
 node scripts/agent-run-artifact.mjs complete --id {bead-id} --status success
 # For TASK|TASK_LITE|DECISION:
 node scripts/gws-task.mjs sync-run --tasklist "$GWS_TASKLIST_ID" --run-id {bead-id} --title "{task}" --status completed

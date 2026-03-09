@@ -44,7 +44,11 @@ A small Symphony-style flow for GGV3: isolate one task, execute autonomously, va
 - `npm run lint`
 - targeted tests for changed surfaces
 
-5. Return handoff:
+5. Documentation sync:
+- run `/full-doc-update <task>` to generate documentation delta report
+- attach report path to handoff evidence
+
+6. Return handoff:
 - `HANDOFF_READY`: include changed files, verification evidence, known risks
 - `BLOCKED`: include blocker, attempted actions, required decision/input
 
