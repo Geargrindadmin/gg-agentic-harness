@@ -32,6 +32,8 @@ final class LMStudioManagerVM: ObservableObject {
     @Published var isRefreshing = false
     @Published var isStartingServer = false
     @Published var error: String?
+    @Published var serverReachable = false
+    @Published var cliAvailable = false
 
     // Browse tab
     @Published var searchQuery: String = ""
@@ -55,6 +57,8 @@ final class LMStudioManagerVM: ObservableObject {
     func refresh() async {
         isRefreshing = true
         error = nil
+        cliAvailable = LMStudioCLI.shared.isAvailable
+        serverReachable = await LMStudioEngine.shared.ping(endpoint: endpoint, allowAutoStart: false)
         let all = await LMStudioEngine.shared.listModels(endpoint: endpoint)
         loadedModels  = all.filter { $0.isLoaded }
         libraryModels = all.filter { !$0.isLoaded }
@@ -66,7 +70,7 @@ final class LMStudioManagerVM: ObservableObject {
         defer { isStartingServer = false }
         let started = await LMStudioEngine.shared.startLocalServer(endpoint: endpoint)
         if !started {
-            error = "Unable to start LM Studio automatically. Launch it manually or install the lms CLI."
+            error = "Unable to start LLM Studio automatically. Launch it manually or install the lms CLI."
             return
         }
         try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -111,9 +115,13 @@ final class LMStudioManagerVM: ObservableObject {
 
     func downloadCatalogModel(_ model: CatalogModel) async {
         let key = model.id
+        guard !activeDownloads.contains(where: { $0.id == key && !$0.isComplete && !$0.isCancelled && $0.error == nil }) else {
+            return
+        }
         var prog = DownloadProgress(id: key, modelName: model.name,
                                     fraction: 0, statusText: "Starting…",
-                                    isComplete: false, error: nil)
+                                    isComplete: false, error: nil,
+                                    canCancel: true)
         activeDownloads.append(prog)
 
         do {
@@ -123,20 +131,45 @@ final class LMStudioManagerVM: ObservableObject {
                     self.activeDownloads[idx] = update
                 }
                 if update.isComplete {
-                    Task {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
-                        self.activeDownloads.removeAll { $0.id == key }
-                        await self.refresh()
-                    }
+                    Task { await self.finishDownload(id: key, refreshModels: true) }
+                } else if update.isCancelled {
+                    Task { await self.finishDownload(id: key, refreshModels: false) }
                 }
             }
         } catch {
+            if let managementError = error as? ModelManagementService.ManagementError,
+               case .downloadCancelled = managementError {
+                if let idx = activeDownloads.firstIndex(where: { $0.id == key }) {
+                    activeDownloads[idx].statusText = "Cancelled"
+                    activeDownloads[idx].canCancel = false
+                    activeDownloads[idx].isCancelled = true
+                }
+                await finishDownload(id: key, refreshModels: false)
+                return
+            }
             prog.error = error.localizedDescription
             prog.statusText = "Failed"
+            prog.canCancel = false
             if let idx = activeDownloads.firstIndex(where: { $0.id == key }) {
                 activeDownloads[idx] = prog
             }
             self.error = error.localizedDescription
+        }
+    }
+
+    func cancelDownload(id: String) {
+        ModelManagementService.shared.cancelDownload(id: id)
+        if let idx = activeDownloads.firstIndex(where: { $0.id == id }) {
+            activeDownloads[idx].statusText = "Cancelling…"
+            activeDownloads[idx].canCancel = false
+        }
+    }
+
+    private func finishDownload(id: String, refreshModels: Bool) async {
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        activeDownloads.removeAll { $0.id == id }
+        if refreshModels {
+            await refresh()
         }
     }
 
@@ -167,20 +200,34 @@ final class LMStudioManagerVM: ObservableObject {
         return base.filter { $0.category == cat }
     }
 
+    var canDeleteFromDisk: Bool { serverReachable }
+
+    var environmentSummary: String {
+        switch (serverReachable, cliAvailable) {
+        case (true, true): return "Server and CLI available"
+        case (true, false): return "Server available"
+        case (false, true): return "CLI available"
+        case (false, false): return "Server offline and CLI unavailable"
+        }
+    }
+
     var endpoint_: String { endpoint }
 }
 
 // MARK: - Main View
 
 struct LMStudioManagerView: View {
+    @EnvironmentObject private var shell: AppShellState
     let initialSearchQuery: String?
+    let autoDownloadInitialQuery: Bool
     @StateObject private var vm = LMStudioManagerVM()
     @ObservedObject private var catalog = LMStudioCatalogService.shared
     @ObservedObject private var mgmt = ModelManagementService.shared
-    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var coordinator = CoordinatorManager.shared
 
-    init(initialSearchQuery: String? = nil) {
+    init(initialSearchQuery: String? = nil, autoDownloadInitialQuery: Bool = false) {
         self.initialSearchQuery = initialSearchQuery
+        self.autoDownloadInitialQuery = autoDownloadInitialQuery
     }
 
     var body: some View {
@@ -200,7 +247,7 @@ struct LMStudioManagerView: View {
                 downloadStrip
             }
         }
-        .frame(width: vm.showConfigDrawer ? 900 : 680, height: 560)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(white: 0.08))
         .foregroundStyle(.primary)
         .confirmationDialog(
@@ -234,6 +281,12 @@ struct LMStudioManagerView: View {
                 vm.activeTab = .browse
                 vm.searchQuery = initialSearchQuery
                 catalog.search(query: initialSearchQuery)
+                if autoDownloadInitialQuery,
+                   let candidate = await catalog.resolveSearchCandidate(query: initialSearchQuery) {
+                    vm.selectedModel = candidate
+                    await vm.downloadCatalogModel(candidate)
+                }
+                shell.lmStudioAutoDownload = false
             }
         }
         .onDisappear { mgmt.stopStatsPolling() }
@@ -246,9 +299,12 @@ struct LMStudioManagerView: View {
             Image(systemName: "cpu.fill")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color(red: 0.94, green: 0.72, blue: 0.18))
-            Text("LM Studio Models")
+            Text("LLM Studio Models")
                 .font(.system(size: 15, weight: .semibold))
             Spacer()
+            Text(vm.environmentSummary)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(vm.serverReachable ? .secondary : .orange)
             // VRAM indicator
             if let stats = mgmt.systemStats, stats.gpuVramTotalMB > 0 {
                 VRAMBadge(stats: stats)
@@ -271,12 +327,7 @@ struct LMStudioManagerView: View {
             }
             .buttonStyle(.plain)
             .disabled(vm.isStartingServer)
-            .help("Start LM Studio explicitly")
-
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
+            .help("Start LLM Studio explicitly")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -302,6 +353,7 @@ struct LMStudioManagerView: View {
                 .buttonStyle(.plain)
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
+                .disabled(catalog.isLoading)
             }
             .padding(.bottom, 8)
         }
@@ -390,7 +442,7 @@ struct LMStudioManagerView: View {
         VStack(alignment: .leading, spacing: 0) {
             if vm.libraryModels.isEmpty && !vm.isRefreshing {
                 emptyState(icon: "internaldrive", title: "No models downloaded",
-                           message: "Use the Browse tab to download models from LM Studio or HuggingFace.")
+                           message: "Use the Browse tab to download models from LLM Studio or HuggingFace.")
             } else {
                 ScrollView {
                     LazyVStack(spacing: 6) {
@@ -398,7 +450,8 @@ struct LMStudioManagerView: View {
                             LibraryModelRow(model: model,
                                             onLoad: { Task { await vm.loadModel(model.id) } },
                                             onDelete: { vm.confirmDelete(model) },
-                                            onConfigure: { vm.openConfig(modelId: model.id) })
+                                            onConfigure: { vm.openConfig(modelId: model.id) },
+                                            canDelete: vm.canDeleteFromDisk)
                         }
                     }
                     .padding(12)
@@ -415,11 +468,14 @@ struct LMStudioManagerView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search models (e.g. Qwen, Llama, DeepSeek…)", text: $vm.searchQuery)
-                        .textFieldStyle(.plain)
-                        .onChange(of: vm.searchQuery) { _, q in
-                            catalog.search(query: q)
-                        }
+                    AppTextField(
+                        text: $vm.searchQuery,
+                        placeholder: "Search models (e.g. Qwen, Llama, DeepSeek…)",
+                        font: .systemFont(ofSize: 12)
+                    )
+                    .onChange(of: vm.searchQuery) { _, q in
+                        catalog.search(query: q)
+                    }
                     if !vm.searchQuery.isEmpty {
                         Button { vm.searchQuery = "" } label: {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
@@ -436,9 +492,11 @@ struct LMStudioManagerView: View {
                 // URL paste
                 HStack(spacing: 8) {
                     Image(systemName: "link").foregroundStyle(.secondary).font(.system(size: 11))
-                    TextField("Paste HuggingFace or LM Studio model URL…", text: $vm.urlPasteText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11))
+                    AppTextField(
+                        text: $vm.urlPasteText,
+                        placeholder: "Paste HuggingFace or LLM Studio model URL…",
+                        font: .systemFont(ofSize: 11)
+                    )
                     Button("Download") {
                         Task { await vm.downloadFromURL() }
                     }
@@ -539,22 +597,21 @@ struct LMStudioManagerView: View {
                     .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
 
                 Group {
-                    let mgr = CoordinatorManager.shared
                     paramSlider("Temperature", value: Binding(
-                        get: { mgr.lmSettings.temperature },
-                        set: { mgr.lmSettings.temperature = $0 }
+                        get: { coordinator.lmSettings.temperature },
+                        set: { coordinator.lmSettings.temperature = $0 }
                     ), in: 0...2, format: "%.2f")
                     paramSlider("Top-P", value: Binding(
-                        get: { mgr.lmSettings.topP },
-                        set: { mgr.lmSettings.topP = $0 }
+                        get: { coordinator.lmSettings.topP },
+                        set: { coordinator.lmSettings.topP = $0 }
                     ), in: 0...1, format: "%.2f")
                     HStack {
                         Label("Max Tokens", systemImage: "number").font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Stepper("\(mgr.lmSettings.maxTokens)",
+                        Stepper("\(coordinator.lmSettings.maxTokens)",
                                 value: Binding(
-                                    get: { mgr.lmSettings.maxTokens },
-                                    set: { mgr.lmSettings.maxTokens = $0 }
+                                    get: { coordinator.lmSettings.maxTokens },
+                                    set: { coordinator.lmSettings.maxTokens = $0 }
                                 ),
                                 in: 256...32768, step: 256)
                         .font(.system(size: 11))
@@ -568,8 +625,8 @@ struct LMStudioManagerView: View {
                     .padding(.top, 4)
 
                 CommandTextEditor(text: Binding(
-                    get: { CoordinatorManager.shared.lmSettings.systemPromptOverride },
-                    set: { CoordinatorManager.shared.lmSettings.systemPromptOverride = $0 }
+                    get: { coordinator.lmSettings.systemPromptOverride },
+                    set: { coordinator.lmSettings.systemPromptOverride = $0 }
                 ), placeholder: "Leave empty to use GGAS default prompt")
                 .frame(height: 100)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
@@ -578,14 +635,25 @@ struct LMStudioManagerView: View {
                     .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                     .padding(.top, 4)
 
-                if let idx = CoordinatorManager.shared.coordinators.firstIndex(where: { $0.type == .lmStudio }) {
-                    TextField("http://localhost:1234",
-                              text: Binding(
-                                get: { CoordinatorManager.shared.coordinators[idx].endpoint },
-                                set: { CoordinatorManager.shared.coordinators[idx].endpoint = $0 }
-                              ))
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12, design: .monospaced))
+                if coordinator.coordinators.contains(where: { $0.type == .lmStudio }) {
+                    AppTextField(
+                        text: Binding(
+                            get: { coordinator.lmStudioEndpoint },
+                            set: { coordinator.setLMStudioEndpoint($0) }
+                        ),
+                        placeholder: "http://localhost:1234",
+                        font: .monospacedSystemFont(ofSize: 12, weight: .regular)
+                    )
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                    )
+                } else {
+                    Text("No LLM Studio coordinator is registered.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(16)
@@ -764,7 +832,9 @@ struct LMStudioManagerView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(vm.activeDownloads) { prog in
-                        DownloadCard(progress: prog)
+                        DownloadCard(progress: prog) {
+                            vm.cancelDownload(id: prog.id)
+                        }
                     }
                 }
                 .padding(.horizontal, 14)
@@ -876,6 +946,7 @@ struct LibraryModelRow: View {
     let onLoad: () -> Void
     let onDelete: () -> Void
     let onConfigure: () -> Void
+    let canDelete: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -901,7 +972,10 @@ struct LibraryModelRow: View {
                     Image(systemName: "trash").foregroundStyle(.red.opacity(0.7))
                 }
                 .buttonStyle(.plain)
-                .help("Delete from disk")
+                .disabled(!canDelete)
+                .help(canDelete
+                    ? "Delete from disk"
+                    : "Delete from disk requires the LLM Studio local server API")
                 Button("Load") { onLoad() }
                     .buttonStyle(.borderedProminent)
                     .tint(Color(red: 0.94, green: 0.72, blue: 0.18).opacity(0.85))
@@ -1058,6 +1132,7 @@ struct VRAMBar: View {
 
 struct DownloadCard: View {
     let progress: DownloadProgress
+    let onCancel: () -> Void
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
@@ -1071,6 +1146,8 @@ struct DownloadCard: View {
             VStack(alignment: .trailing, spacing: 3) {
                 if progress.isComplete {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                } else if progress.isCancelled {
+                    Image(systemName: "stop.circle.fill").foregroundStyle(.orange)
                 } else if progress.error != nil {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
                 } else {
@@ -1078,6 +1155,11 @@ struct DownloadCard: View {
                         .frame(width: 80)
                     Text("\(Int(progress.fraction * 100))%")
                         .font(.system(size: 10, design: .monospaced))
+                }
+                if progress.canCancel {
+                    Button("Cancel", role: .destructive, action: onCancel)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .medium))
                 }
             }
         }

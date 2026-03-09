@@ -109,6 +109,7 @@ struct ConfigView: View {
     @State private var plannerStoreExists  = false
     @State private var controlPlaneMeta: ControlPlaneMeta? = nil
     @State private var controlPlaneCompatibilityMessage: String? = nil
+    @State private var runtimeDiscovery: A2AClient.RuntimeDiscoveryResponse? = nil
     @State private var claudeVersion: String? = nil
     @State private var kimiVersion:   String? = nil
     @State private var nodeVersion:   String? = nil
@@ -120,6 +121,8 @@ struct ConfigView: View {
     // Editable API key state
     @State private var editingAnthropicKey = ""
     @State private var editingMoonshotKey  = ""
+    @State private var editingOpenAIKey    = ""
+    @State private var editingGeminiKey    = ""
     @State private var keySaveMessage: String? = nil
     @State private var keySaving = false
 
@@ -151,6 +154,13 @@ struct ConfigView: View {
         .task { await refresh() }
         .onChange(of: launcher.state) { _, _ in Task { await refresh() } }
         .sheet(isPresented: $showSetupWizard) { SetupWizardView(showWizard: $showSetupWizard) }
+    }
+
+    private var hasPendingCredentialInput: Bool {
+        !editingAnthropicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !editingMoonshotKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !editingOpenAIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !editingGeminiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Sections (extracted to satisfy Swift type-checker)
@@ -244,10 +254,40 @@ struct ConfigView: View {
     // MARK: - API Keys Section
 
     @ViewBuilder private var apiKeysSection: some View {
-        GroupBox("API Keys") {
+        GroupBox("Credentials") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Optional when the harness uses direct provider APIs instead of your local authenticated CLIs.\nKeys are stored in ~/.ggas/env.")
+                Text("The harness prefers local authenticated CLIs first, then API-key fallbacks. OAuth/session-backed CLIs and API keys both appear here.")
                     .font(.caption).foregroundStyle(.secondary)
+
+                if let runtimeDiscovery {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Coordinator Auto-Selection")
+                                .font(.caption.bold())
+                            Spacer()
+                            Text("\(runtimeDiscovery.coordinatorSelection.selected.uppercased()) · \(runtimeDiscovery.coordinatorSelection.reason)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
+                        }
+
+                        ForEach(runtimeDiscovery.discoveries.filter(\.isPrimaryRuntime)) { discovery in
+                            runtimeDiscoveryRow(discovery)
+                        }
+
+                        let inheritedProviders = runtimeDiscovery.discoveries.filter { !$0.isPrimaryRuntime }
+                        if !inheritedProviders.isEmpty {
+                            Divider()
+                            Text("Inherited OAuth Providers")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            ForEach(inheritedProviders) { discovery in
+                                runtimeDiscoveryRow(discovery)
+                            }
+                        }
+                    }
+                }
 
                 Divider()
 
@@ -277,6 +317,32 @@ struct ConfigView: View {
                     envKey: "MOONSHOT_API_KEY"
                 )
 
+                Divider()
+
+                apiKeyRow(
+                    label: "OpenAI (Codex)",
+                    icon: "circle.hexagonpath.fill",
+                    isSet: keyStore.hasOpenAIKey,
+                    currentKey: keyStore.currentValue(for: "OPENAI_API_KEY"),
+                    editingValue: $editingOpenAIKey,
+                    placeholder: "sk-proj-…",
+                    docsURL: "https://platform.openai.com/api-keys",
+                    envKey: "OPENAI_API_KEY"
+                )
+
+                Divider()
+
+                apiKeyRow(
+                    label: "Google Gemini",
+                    icon: "sparkles.rectangle.stack",
+                    isSet: keyStore.hasGeminiKey,
+                    currentKey: keyStore.currentValue(for: "GEMINI_API_KEY"),
+                    editingValue: $editingGeminiKey,
+                    placeholder: "AIza…",
+                    docsURL: "https://aistudio.google.com/apikey",
+                    envKey: "GEMINI_API_KEY"
+                )
+
                 if let msg = keySaveMessage {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
@@ -284,11 +350,11 @@ struct ConfigView: View {
                     }
                 }
 
-                Button(keySaving ? "Saving…" : "Save API Keys") {
+                Button(keySaving ? "Saving…" : "Save Credentials") {
                     Task { await saveKeys() }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(keySaving || (editingAnthropicKey.isEmpty && editingMoonshotKey.isEmpty))
+                .disabled(keySaving || !hasPendingCredentialInput)
                 .font(.caption)
             }.padding(4)
         }
@@ -324,9 +390,86 @@ struct ConfigView: View {
             if isSet, let masked = currentKey {
                 Text(maskKey(masked)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
             }
-            TextField(isSet ? "Enter new key to replace…" : placeholder, text: editingValue)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 11, design: .monospaced))
+            AppTextField(
+                text: editingValue,
+                placeholder: isSet ? "Enter new key to replace…" : placeholder,
+                font: .monospacedSystemFont(ofSize: 11, weight: .regular)
+            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func runtimeDiscoveryRow(_ discovery: A2AClient.RuntimeCredentialSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: runtimeIcon(discovery.runtime))
+                    .foregroundStyle(discovery.authenticated ? .green : .orange)
+                    .frame(width: 16)
+                Text(discovery.label ?? discovery.runtime.capitalized)
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+                credentialBadge(discovery.localCliAuth ? "OAuth/CLI" : discovery.directApiAvailable ? "API" : "Missing",
+                                color: discovery.localCliAuth ? .green : discovery.directApiAvailable ? .blue : .orange)
+            }
+            Text(discovery.summary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            if let preferredTransport = discovery.preferredTransport, !preferredTransport.isEmpty {
+                Text("Preferred transport: \(preferredTransport)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            ForEach(discovery.sources.prefix(3)) { source in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(source.status == "present" ? Color.green : Color.secondary.opacity(0.35))
+                        .frame(width: 6, height: 6)
+                    Text(source.detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(source.location)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.03))
+        )
+    }
+
+    @ViewBuilder
+    private func credentialBadge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(0.12)))
+    }
+
+    private func runtimeIcon(_ runtime: String) -> String {
+        switch runtime.lowercased() {
+        case "claude": return "sparkles"
+        case "codex": return "circle.hexagonpath.fill"
+        case "kimi": return "bolt.fill"
+        case let value where value.contains("gemini"): return "sparkles.rectangle.stack"
+        case let value where value.contains("gpt"): return "circle.hexagonpath.fill"
+        case let value where value.contains("antigravity"): return "wand.and.stars"
+        default: return "cpu"
         }
     }
 
@@ -338,15 +481,31 @@ struct ConfigView: View {
     @MainActor
     private func saveKeys() async {
         keySaving = true
+        defer { keySaving = false }
         var bridgeRewired = false
         let anthropic = editingAnthropicKey.trimmingCharacters(in: .whitespaces)
         let moonshot  = editingMoonshotKey.trimmingCharacters(in: .whitespaces)
+        let openAI    = editingOpenAIKey.trimmingCharacters(in: .whitespaces)
+        let gemini    = editingGeminiKey.trimmingCharacters(in: .whitespaces)
+
+        guard hasPendingCredentialInput else {
+            keySaveMessage = "Enter a credential to save"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.keySaveMessage = nil }
+            return
+        }
 
         // Only overwrite keys that have new values entered
         let finalAnthropic = anthropic.isEmpty ? (keyStore.currentValue(for: "ANTHROPIC_API_KEY") ?? "") : anthropic
         let finalMoonshot  = moonshot.isEmpty  ? (keyStore.currentValue(for: "MOONSHOT_API_KEY")  ?? "") : moonshot
+        let finalOpenAI    = openAI.isEmpty    ? (keyStore.currentValue(for: "OPENAI_API_KEY")    ?? "") : openAI
+        let finalGemini    = gemini.isEmpty    ? (keyStore.currentValue(for: "GEMINI_API_KEY")    ?? "") : gemini
 
-        APIKeyStore.shared.save(anthropic: finalAnthropic, moonshot: finalMoonshot)
+        APIKeyStore.shared.save(
+            anthropic: finalAnthropic,
+            moonshot: finalMoonshot,
+            openAI: finalOpenAI,
+            gemini: finalGemini
+        )
 
         // Re-wire gg-agent-bridge with new keys
         let projectRoot = ProjectSettings.shared.projectRoot
@@ -378,10 +537,12 @@ struct ConfigView: View {
 
         editingAnthropicKey = ""
         editingMoonshotKey  = ""
+        editingOpenAIKey    = ""
+        editingGeminiKey    = ""
         keySaveMessage = bridgeRewired
             ? "Keys saved to ~/.ggas/env and bridge updated"
             : "Keys saved to ~/.ggas/env"
-        keySaving = false
+        runtimeDiscovery = try? await A2AClient.shared.fetchRuntimeDiscovery()
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.keySaveMessage = nil }
     }
 
@@ -646,18 +807,21 @@ struct ConfigView: View {
     private func refresh() async {
         checking = true
         async let compatibility = A2AClient.shared.probeControlPlaneCompatibility()
+        async let discovery = try? A2AClient.shared.fetchRuntimeDiscovery()
         async let cl  = shellVersion("claude")
         async let km  = shellVersion("kimi")
         async let nd  = shellVersion("node")
         async let npm = shellVersion("npm")
         let compatibilityResult = await compatibility
+        runtimeDiscovery = await discovery
         (claudeVersion, kimiVersion, nodeVersion, npmVersion) =
             await (cl, km, nd, npm)
         a2aOnline = compatibilityResult.compatible
         controlPlaneMeta = compatibilityResult.meta
         controlPlaneCompatibilityMessage = compatibilityResult.message
         plannerStoreExists = !plannerStorePath.isEmpty && FileManager.default.fileExists(atPath: plannerStorePath)
-        geminiKeySet  = ProcessInfo.processInfo.environment["GEMINI_API_KEY"] != nil
+        keyStore.reload()
+        geminiKeySet  = keyStore.hasGeminiKey
         checking = false
     }
 
@@ -696,6 +860,12 @@ struct ConfigView: View {
                 if let exp = exposes { Text(exp).font(.caption2).foregroundStyle(.orange) }
             }
         }
+    }
+}
+
+private extension A2AClient.RuntimeCredentialSnapshot {
+    var isPrimaryRuntime: Bool {
+        ["codex", "claude", "kimi"].contains(runtime.lowercased())
     }
 }
 

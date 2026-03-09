@@ -156,17 +156,17 @@ final class LMStudioEngine {
 
     // MARK: - List models
 
-    /// Returns ALL models downloaded in the LM Studio library.
+    /// Returns ALL models downloaded in the LLM Studio library.
     ///
-    /// LM Studio exposes two endpoints:
-    /// • `/api/v0/models`  — full library (downloaded, not necessarily loaded). Requires LM Studio ≥ 0.3.
+    /// LLM Studio exposes two endpoints:
+    /// • `/api/v0/models`  — full library (downloaded, not necessarily loaded). Requires LLM Studio ≥ 0.3.
     /// • `/v1/models`      — only the currently-loaded model(s) in VRAM. OpenAI-compat fallback.
     ///
-    /// We try the library endpoint first and fall back gracefully.
+    /// We try the REST API first, then fall back to the local `lms` CLI.
     func listModels(endpoint: String) async -> [LMStudioModel] {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
 
-        // 1️⃣  Try the full library endpoint (LM Studio ≥ 0.3)
+        // 1️⃣  Try the full library endpoint (LLM Studio ≥ 0.3)
         if let libraryModels = await fetchLibraryModels(base: base), !libraryModels.isEmpty {
             let loadedIds = Set((await fetchLoadedModels(base: base)).map(\.id))
             if loadedIds.isEmpty { return libraryModels }
@@ -184,7 +184,26 @@ final class LMStudioEngine {
             }
         }
 
-        // 2️⃣  Fall back to OpenAI /v1/models (loaded models only)
+        // 2️⃣  Fall back to CLI-backed library and loaded-state detection.
+        let libraryModels = await LMStudioCLI.shared.listLibraryModels()
+        if !libraryModels.isEmpty {
+            let loadedIds = await LMStudioCLI.shared.listLoadedModelIds()
+            if loadedIds.isEmpty { return libraryModels }
+            return libraryModels.map { model in
+                if loadedIds.contains(model.id) {
+                    return LMStudioModel(
+                        id: model.id,
+                        type: model.type,
+                        publisher: model.publisher,
+                        contextLength: model.contextLength,
+                        state: "loaded"
+                    )
+                }
+                return model
+            }
+        }
+
+        // 3️⃣  Final fallback to OpenAI /v1/models (loaded models only).
         return await fetchLoadedModels(base: base)
     }
 
@@ -192,7 +211,10 @@ final class LMStudioEngine {
     func loadedModelIds(endpoint: String) async -> Set<String> {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
         let models = await fetchLoadedModels(base: base)
-        return Set(models.map(\.id))
+        if !models.isEmpty {
+            return Set(models.map(\.id))
+        }
+        return await LMStudioCLI.shared.listLoadedModelIds()
     }
 
     // MARK: - Private fetch helpers
@@ -284,20 +306,31 @@ final class LMStudioEngine {
 
     // MARK: - Auto-start support
 
-    /// Attempts to launch LM Studio app or daemon if the API is offline.
+    /// Attempts to launch LLM Studio app or daemon if the API is offline.
     /// Returns true if a start attempt was made (so callers can retry).
     private func ensureServerRunning(base: String) async -> Bool {
         #if os(macOS)
         if triedLaunchingApp { return false }
         triedLaunchingApp = true
 
-        // 1) Try the LM Studio app bundle
+        // 1) Try the LLM Studio app bundle
         let appPaths = [
             "/Applications/LM Studio.app",
             NSHomeDirectory() + "/Applications/LM Studio.app"
         ]
         if let appPath = appPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) {
-            NSWorkspace.shared.launchApplication(appPath)
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            let appURL = URL(fileURLWithPath: appPath)
+            try? await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
             // brief delay to allow the daemon to boot
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s
             return true
@@ -318,8 +351,8 @@ final class LMStudioEngine {
 
     // MARK: - Delete model from library
 
-    /// Delete a downloaded model from the LM Studio library via REST.
-    /// Requires LM Studio >= 0.3.6. Falls back to lms CLI if REST fails.
+    /// Delete a downloaded model from the LLM Studio library via REST.
+    /// Requires LLM Studio >= 0.3.6.
     func deleteModel(id: String, endpoint: String) async throws {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
@@ -334,9 +367,7 @@ final class LMStudioEngine {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         // 404 means already gone — treat as success
         guard (200..<300).contains(status) || status == 404 else {
-            // Fall back to CLI
-            try await LMStudioCLI.shared.deleteModel(id: id)
-            return
+            throw LMAPIError.httpError(status, "delete \(id)")
         }
     }
 
@@ -355,7 +386,7 @@ final class LMStudioEngine {
         case httpError(Int, String)
         var errorDescription: String? {
             if case .httpError(let code, let op) = self {
-                return "LM Studio API error \(code) during '\(op)'. Is LM Studio running with local server enabled?"
+                return "LLM Studio API error \(code) during '\(op)'. Is LLM Studio running with local server enabled?"
             }
             return nil
         }

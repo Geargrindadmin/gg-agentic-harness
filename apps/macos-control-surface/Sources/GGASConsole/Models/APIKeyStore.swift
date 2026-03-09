@@ -11,6 +11,8 @@ final class APIKeyStore: ObservableObject {
     // Published flags — true = key is set (non-empty), false = not set
     @Published var hasAnthropicKey = false
     @Published var hasMoonshotKey  = false
+    @Published var hasOpenAIKey    = false
+    @Published var hasGeminiKey    = false
 
     private let envDir  = NSHomeDirectory() + "/.ggas"
     private var envFile: String { envDir + "/env" }
@@ -36,21 +38,30 @@ final class APIKeyStore: ObservableObject {
     func reload() {
         hasAnthropicKey = currentValue(for: "ANTHROPIC_API_KEY") != nil
         hasMoonshotKey  = currentValue(for: "MOONSHOT_API_KEY")  != nil
+        hasOpenAIKey    = currentValue(for: "OPENAI_API_KEY")    != nil
+        hasGeminiKey    = currentValue(for: "GEMINI_API_KEY")    != nil
     }
 
     // MARK: - Write
 
-    func save(anthropic: String, moonshot: String) {
+    func save(anthropic: String, moonshot: String, openAI: String = "", gemini: String = "") {
         try? FileManager.default.createDirectory(atPath: envDir, withIntermediateDirectories: true)
 
         var lines: [String] = []
         if let existing = try? String(contentsOfFile: envFile, encoding: .utf8) {
             lines = existing.components(separatedBy: "\n")
-                .filter { !$0.hasPrefix("export ANTHROPIC_API_KEY=") && !$0.hasPrefix("export MOONSHOT_API_KEY=") }
+                .filter {
+                    !$0.hasPrefix("export ANTHROPIC_API_KEY=")
+                    && !$0.hasPrefix("export MOONSHOT_API_KEY=")
+                    && !$0.hasPrefix("export OPENAI_API_KEY=")
+                    && !$0.hasPrefix("export GEMINI_API_KEY=")
+                }
                 .filter { !$0.isEmpty }
         }
         if !anthropic.isEmpty { lines.append("export ANTHROPIC_API_KEY=\"\(anthropic)\"") }
         if !moonshot.isEmpty  { lines.append("export MOONSHOT_API_KEY=\"\(moonshot)\"")  }
+        if !openAI.isEmpty    { lines.append("export OPENAI_API_KEY=\"\(openAI)\"") }
+        if !gemini.isEmpty    { lines.append("export GEMINI_API_KEY=\"\(gemini)\"") }
 
         let content = lines.joined(separator: "\n") + "\n"
         try? content.write(toFile: envFile, atomically: true, encoding: .utf8)

@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test": "node -e \"console.log('gg-control-plane-server: no tests yet')\""
+    "test": "npm run build --workspace=@geargrind/gg-runtime-adapters --workspace=@geargrind/gg-orchestrator && npm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
     "node-pty": "^1.1.0"

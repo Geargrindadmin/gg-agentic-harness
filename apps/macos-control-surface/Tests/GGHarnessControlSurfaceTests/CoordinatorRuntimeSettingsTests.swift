@@ -59,4 +59,17 @@ struct CoordinatorRuntimeSettingsTests {
         #expect(settings.usesExplicitWorkerRoles == false)
         #expect(settings.bridgeRolesForDispatch == nil)
     }
+
+    @MainActor
+    @Test
+    func lmStudioEndpointAccessorUpdatesWithoutDirectArrayBinding() {
+        let manager = CoordinatorManager.shared
+        let original = manager.lmStudioEndpoint
+        let replacement = "http://localhost:4321"
+        defer { manager.setLMStudioEndpoint(original) }
+
+        manager.setLMStudioEndpoint(replacement)
+
+        #expect(manager.lmStudioEndpoint == replacement)
+    }
 }

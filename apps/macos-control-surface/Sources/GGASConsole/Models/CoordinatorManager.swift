@@ -10,7 +10,7 @@ enum CoordinatorType: String, CaseIterable, Identifiable, Codable {
     case codex    = "Codex"
     case claude   = "Claude Code"
     case kimi     = "Kimi Code"
-    case lmStudio = "LM Studio"
+    case lmStudio = "LLM Studio"
 
     var id: String { rawValue }
 
@@ -30,6 +30,28 @@ enum CoordinatorType: String, CaseIterable, Identifiable, Codable {
         case .kimi:     return Color(red: 0.20, green: 0.75, blue: 1.00)   // blue
         case .lmStudio: return Color(red: 0.94, green: 0.72, blue: 0.18)   // amber
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        switch raw {
+        case "Codex":
+            self = .codex
+        case "Claude Code":
+            self = .claude
+        case "Kimi Code":
+            self = .kimi
+        case "LM Studio", "LLM Studio":
+            self = .lmStudio
+        default:
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown coordinator type: \(raw)")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -608,6 +630,15 @@ final class CoordinatorManager: ObservableObject {
         // Also update label so the card shows the short model name
         coordinators[idx].label = id.components(separatedBy: "/").last ?? id
         addLine("⇄ Active model → \(coordinators[idx].label)", level: .info)
+    }
+
+    var lmStudioEndpoint: String {
+        coordinators.first(where: { $0.type == .lmStudio })?.endpoint ?? "http://localhost:1234"
+    }
+
+    func setLMStudioEndpoint(_ endpoint: String) {
+        guard let idx = coordinators.firstIndex(where: { $0.type == .lmStudio }) else { return }
+        coordinators[idx].endpoint = endpoint
     }
 
     func add(_ config: CoordinatorConfig) {

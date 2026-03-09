@@ -12,6 +12,10 @@ final class WorkflowContextStore: ObservableObject {
 
     private init() {}
 
+    static func testingInstance() -> WorkflowContextStore {
+        WorkflowContextStore()
+    }
+
     var hasSelection: Bool {
         selectedTaskId != nil || selectedRunId != nil
     }
@@ -64,4 +68,3 @@ final class WorkflowContextStore: ObservableObject {
         }
     }
 }
-

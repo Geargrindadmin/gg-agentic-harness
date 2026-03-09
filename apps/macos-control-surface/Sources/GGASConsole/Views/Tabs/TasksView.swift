@@ -276,8 +276,8 @@ struct TasksView: View {
             .buttonStyle(.bordered)
             .disabled(workflow.selectedRunId == nil)
 
-            Button("Open Console") {
-                shell.selectedTab = .control
+            Button("Open LLM Studio") {
+                shell.openLMStudioCatalog()
             }
             .buttonStyle(.bordered)
 
@@ -655,6 +655,7 @@ private struct PlannerIntentCard: View {
     let preset: PlannerPreset
     let onApplyIntent: () -> Void
     let onApplySuggestedTeam: () -> Void
+    private let cardHeight: CGFloat = 228
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -674,7 +675,8 @@ private struct PlannerIntentCard: View {
             Text(preset.prompt)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(3)
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Suggested Team")
@@ -696,22 +698,26 @@ private struct PlannerIntentCard: View {
                 }
             }
 
+            Spacer(minLength: 0)
+
             HStack(spacing: 8) {
                 Button("Run Intent") {
                     onApplyIntent()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .frame(maxWidth: .infinity)
 
                 Button("Apply Suggested Team") {
                     onApplySuggestedTeam()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .frame(maxWidth: .infinity)
             }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.secondary.opacity(0.08))

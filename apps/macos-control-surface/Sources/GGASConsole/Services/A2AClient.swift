@@ -667,6 +667,45 @@ final class A2AClient: ObservableObject {
         try await get("/status")
     }
 
+    struct RuntimeCredentialSource: Codable, Identifiable {
+        let id: String
+        let type: String
+        let location: String
+        let status: String
+        let detail: String
+    }
+
+    struct RuntimeCredentialSnapshot: Codable, Identifiable {
+        let runtime: String
+        let label: String?
+        let binaryPath: String?
+        let authenticated: Bool
+        let localCliAuth: Bool
+        let directApiAvailable: Bool
+        let preferredTransport: String?
+        let summary: String
+        let sources: [RuntimeCredentialSource]
+
+        var id: String { runtime }
+    }
+
+    struct CoordinatorSelectionSnapshot: Codable {
+        let requested: String
+        let selected: String
+        let reason: String
+        let order: [String]
+        let discoveries: [RuntimeCredentialSnapshot]
+    }
+
+    struct RuntimeDiscoveryResponse: Codable {
+        let coordinatorSelection: CoordinatorSelectionSnapshot
+        let discoveries: [RuntimeCredentialSnapshot]
+    }
+
+    func fetchRuntimeDiscovery() async throws -> RuntimeDiscoveryResponse {
+        try await get("/runtime-discovery")
+    }
+
     // MARK: - Task 9: RunEvent SSE stream (Live push from server)
 
     /// Subscribe to the server's /api/events SSE stream.
@@ -700,6 +739,41 @@ final class A2AClient: ObservableObject {
                     } catch {
                         // transient failure — wait and reconnect
                         try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    }
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    func subscribeWorkerStream(runId: String, agentId: String) -> AsyncStream<String> {
+        AsyncStream { continuation in
+            Task {
+                while !Task.isCancelled {
+                    guard let url = apiURL("/workers/\(runId)/\(agentId)/stream") else { break }
+                    var req = URLRequest(url: url)
+                    req.timeoutInterval = 0
+                    do {
+                        let (bytes, _) = try await URLSession.shared.bytes(for: req)
+                        var buffer = ""
+                        for try await byte in bytes {
+                            guard let ch = String(bytes: [byte], encoding: .utf8) else { continue }
+                            buffer += ch
+                            if !buffer.hasSuffix("\n\n") { continue }
+                            for line in buffer.components(separatedBy: "\n") {
+                                guard line.hasPrefix("data: ") else { continue }
+                                let json = String(line.dropFirst(6))
+                                guard
+                                    let data = json.data(using: .utf8),
+                                    let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                    let streamed = object["line"] as? String
+                                else { continue }
+                                continuation.yield(streamed)
+                            }
+                            buffer = ""
+                        }
+                    } catch {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
                     }
                 }
                 continuation.finish()

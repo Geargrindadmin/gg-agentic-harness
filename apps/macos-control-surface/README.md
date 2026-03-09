@@ -98,3 +98,8 @@ GGASConsoleApp.swift          @main entry point
 | DMG distributable | ❌ | ✅ |
 
 Both connect to the same harness control-plane backend — they're complementary, not replacements.
+
+## References
+
+- SwiftUI libraries reference for future control-surface enhancements:
+  `https://github.com/Toni77777/awesome-swiftui-libraries`

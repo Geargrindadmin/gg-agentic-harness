@@ -15,11 +15,18 @@ enum AgentDotStatus {
 
 struct WorkerNode: Identifiable {
     let id: String
+    var runId: String? = nil
     var label: String
     var status: AgentDotStatus = .running
     var summary: String = ""
     var worktreePath: String? = nil
     var lastHeartbeat: Date? = nil
+    var runtime: String? = nil
+    var role: String? = nil
+    var personaId: String? = nil
+    var progressPct: Int = 0
+    var launchTransport: String? = nil
+    var executionStatus: String? = nil
 }
 
 struct ManagerNode: Identifiable {
@@ -28,6 +35,9 @@ struct ManagerNode: Identifiable {
     var status: AgentDotStatus = .idle
     var workers: [WorkerNode] = []
     var worktreePath: String? = nil
+    var runtime: String? = nil
+    var totalMessages: Int = 0
+    var delegationCount: Int = 0
 
     var activeWorkerCount: Int { workers.filter(\.status.isActive).count }
     var doneWorkerCount:   Int { workers.filter { $0.status == .done }.count }
@@ -126,24 +136,41 @@ final class AgentSwarmModel: ObservableObject {
                 let heartbeat = ISO8601DateFormatter().date(from: worker.lastHeartbeat)
                 let summary = worker.currentTask ?? managers[mSlot].workers.first(where: { $0.id == agentId })?.summary ?? ""
                 if let wi = managers[mSlot].workers.firstIndex(where: { $0.id == agentId }) {
+                    managers[mSlot].workers[wi].runId = latest.runId
                     managers[mSlot].workers[wi].status = dotStatus
                     managers[mSlot].workers[wi].summary = summary
                     managers[mSlot].workers[wi].lastHeartbeat = heartbeat
+                    managers[mSlot].workers[wi].runtime = worker.runtime
+                    managers[mSlot].workers[wi].role = worker.role
+                    managers[mSlot].workers[wi].personaId = worker.personaId
+                    managers[mSlot].workers[wi].progressPct = worker.progressPct
+                    managers[mSlot].workers[wi].launchTransport = worker.launchTransport
+                    managers[mSlot].workers[wi].executionStatus = worker.executionStatus
                     if let wtp = worker.worktreePath { managers[mSlot].workers[wi].worktreePath = wtp }
                 } else if !seenWorkers.contains(agentId) {
                     managers[mSlot].workers.append(
                         WorkerNode(
                             id: agentId,
+                            runId: latest.runId,
                             label: agentId,
                             status: dotStatus,
                             summary: summary,
                             worktreePath: worker.worktreePath,
-                            lastHeartbeat: heartbeat
+                            lastHeartbeat: heartbeat,
+                            runtime: worker.runtime,
+                            role: worker.role,
+                            personaId: worker.personaId,
+                            progressPct: worker.progressPct,
+                            launchTransport: worker.launchTransport,
+                            executionStatus: worker.executionStatus
                         )
                     )
                     seenWorkers.insert(agentId)
                 }
             }
+            managers[mSlot].runtime = latest.telemetry?.coordinatorRuntime
+            managers[mSlot].totalMessages = latest.telemetry?.totalMessages ?? latest.totalMessages
+            managers[mSlot].delegationCount = latest.telemetry?.delegationCount ?? 0
             if latest.workers.values.allSatisfy({ ["complete", "handoff_ready", "completed", "terminated"].contains($0.status) }) {
                 managers[mSlot].status = .done
             } else if latest.workers.values.contains(where: { $0.status == "queued" }) {
@@ -374,10 +401,17 @@ final class AgentSwarmModel: ObservableObject {
 struct ResourceNode: Identifiable {
     let id: String          // agentId or "coordinator" / "manager-{runId}"
     let label: String
+    var subtitle: String? = nil
+    var detail: String? = nil
     var status: AgentDotStatus
     var role: NodeRole
     var position: CGPoint   // assigned by layout engine; updated each frame
     var loadFraction: Double = 0   // 0.0–1.0 for ring fill / heat coloring
+    var runtime: String? = nil
+    var personaId: String? = nil
+    var runId: String? = nil
+    var agentId: String? = nil
+    var worktreePath: String? = nil
 
     enum NodeRole {
         case coordinator
@@ -410,10 +444,15 @@ extension AgentSwarmModel {
         // Coordinator
         nodes.append(ResourceNode(
             id: "coordinator",
-            label: coordinatorLabel,
+            label: shortRuntimeLabel(coordinatorLabel),
+            subtitle: "Coordinator",
+            detail: "\(totalRunning) active · \(totalDone) done · \(totalFailed) failed",
             status: coordinatorStatus,
             role: .coordinator,
-            position: CGPoint(x: cx, y: topY)
+            position: CGPoint(x: cx, y: topY),
+            runtime: coordinatorLabel,
+            agentId: "coordinator",
+            worktreePath: ProjectSettings.shared.projectRoot
         ))
 
         let visibleManagers = managers.filter { $0.status != .idle }
@@ -428,11 +467,17 @@ extension AgentSwarmModel {
             let mx = mStartX + CGFloat(mi) * mSpacingX
             nodes.append(ResourceNode(
                 id: "manager-\(manager.id)",
-                label: String(manager.label.prefix(12)),
+                label: swarmShortManagerLabel(manager.label),
+                subtitle: manager.runtime.map(shortRuntimeLabel) ?? "Run",
+                detail: "\(manager.activeWorkerCount) active · \(manager.totalMessages) msgs",
                 status: manager.status,
                 role: .manager,
                 position: CGPoint(x: mx, y: managerY),
-                loadFraction: Double(manager.activeWorkerCount) / max(1.0, Double(manager.workers.count))
+                loadFraction: Double(manager.activeWorkerCount) / max(1.0, Double(manager.workers.count)),
+                runtime: manager.runtime,
+                runId: manager.id,
+                agentId: manager.id,
+                worktreePath: manager.worktreePath
             ))
 
             let wCount = CGFloat(manager.workers.count)
@@ -442,14 +487,21 @@ extension AgentSwarmModel {
 
             for (wi, worker) in manager.workers.enumerated() {
                 let wx = wStartX + CGFloat(wi) * wSpacingX
+                let category = worker.role ?? worker.label
                 nodes.append(ResourceNode(
                     id: worker.id,
-                    label: String(worker.label
-                        .components(separatedBy: "-").last?
-                        .prefix(10) ?? worker.label.prefix(10)),
+                    label: workerDisplayLabel(worker),
+                    subtitle: workerSubtitle(worker),
+                    detail: workerDetail(worker),
                     status: worker.status,
-                    role: .worker(category: worker.label),
-                    position: CGPoint(x: wx, y: workerY)
+                    role: .worker(category: category),
+                    position: CGPoint(x: wx, y: workerY),
+                    loadFraction: min(1.0, max(0.0, Double(worker.progressPct) / 100.0)),
+                    runtime: worker.runtime,
+                    personaId: worker.personaId,
+                    runId: worker.runId ?? manager.id,
+                    agentId: worker.id,
+                    worktreePath: worker.worktreePath
                 ))
             }
         }
@@ -479,8 +531,18 @@ extension AgentSwarmModel {
 
         // Active comm-link edges (AGENT_MSG flashes)
         for link in activeLinks {
-            let from = nodes.first { $0.label.hasSuffix(link.fromId) || $0.id == link.fromId }
-            let to   = nodes.first { $0.label.hasSuffix(link.toId)   || $0.id == link.toId   }
+            let from = nodes.first {
+                $0.id == link.fromId
+                    || $0.agentId == link.fromId
+                    || $0.runId == link.fromId
+                    || $0.label.hasSuffix(link.fromId)
+            }
+            let to   = nodes.first {
+                $0.id == link.toId
+                    || $0.agentId == link.toId
+                    || $0.runId == link.toId
+                    || $0.label.hasSuffix(link.toId)
+            }
             if let f = from, let t = to {
                 edges.append(EdgePath(id: link.id, fromId: f.id, toId: t.id,
                                       topic: .globalEvents, animPhase: 0, isActive: true))
@@ -507,4 +569,69 @@ extension AgentSwarmModel {
 
         return edges
     }
+}
+
+func shortRuntimeLabel(_ runtime: String) -> String {
+    let lower = runtime.lowercased()
+    if lower.contains("codex") { return "Codex" }
+    if lower.contains("claude") { return "Claude" }
+    if lower.contains("kimi") { return "Kimi" }
+    if lower.contains("gpt") || lower.contains("openai") { return "GPT" }
+    if lower.contains("gemini") { return "Gemini" }
+    return runtime.isEmpty ? "Runtime" : runtime
+}
+
+func swarmShortWorkerLabel(_ id: String) -> String {
+    let parts = id.components(separatedBy: CharacterSet(charactersIn: "-_ "))
+    let roles = ["Scout","Builder","Reviewer","Architect","Planner","Tester","Designer",
+                 "Analyst","Writer","Researcher","Debugger","Documenter","Optimizer",
+                 "Coordinator","Engineer","Developer","Security","Auth"]
+    if let role = parts.first(where: { p in roles.contains(where: { $0.lowercased() == p.lowercased() }) }) {
+        if let idx = parts.firstIndex(of: role), idx + 1 < parts.count,
+           parts[idx + 1].allSatisfy(\.isNumber) {
+            return "\(role)-\(parts[idx + 1])"
+        }
+        return role
+    }
+    let last = parts.last ?? id
+    return last.count <= 4 ? "W-\(last)" : String(id.prefix(6))
+}
+
+func swarmShortManagerLabel(_ id: String) -> String {
+    if id.hasPrefix("Orchestrator-") { return "O -\(id.dropFirst("Orchestrator-".count))" }
+    if id.hasPrefix("Manager-") { return "M -\(id.dropFirst("Manager-".count))" }
+    if id.hasPrefix("Builder-") { return "B -\(id.dropFirst("Builder-".count))" }
+    return String(id.prefix(7))
+}
+
+func workerDisplayLabel(_ worker: WorkerNode) -> String {
+    if let role = worker.role, !role.isEmpty {
+        return role
+            .split(separator: "-")
+            .map { $0.capitalized }
+            .joined(separator: " ")
+    }
+    return swarmShortWorkerLabel(worker.label)
+}
+
+func workerSubtitle(_ worker: WorkerNode) -> String? {
+    let runtime = worker.runtime.map(shortRuntimeLabel)
+    let persona = worker.personaId?.replacingOccurrences(of: "-", with: " ")
+    return [runtime, persona]
+        .compactMap { $0 }
+        .filter { !$0.isEmpty }
+        .joined(separator: " · ")
+}
+
+func workerDetail(_ worker: WorkerNode) -> String? {
+    let progress = worker.progressPct > 0 ? "\(worker.progressPct)%" : nil
+    let execution = worker.executionStatus
+    let transport = worker.launchTransport
+    let parts = [progress, execution, transport]
+        .compactMap { $0 }
+        .filter { !$0.isEmpty }
+    if !parts.isEmpty {
+        return parts.joined(separator: " · ")
+    }
+    return worker.summary.isEmpty ? nil : worker.summary
 }

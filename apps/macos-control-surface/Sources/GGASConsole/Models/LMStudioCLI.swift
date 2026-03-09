@@ -6,6 +6,20 @@
 
 import Foundation
 
+private final class LMStudioDownloadLineBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer = ""
+
+    func append(_ chunk: String) -> [String] {
+        lock.lock()
+        buffer += chunk
+        let lines = buffer.components(separatedBy: "\n")
+        buffer = lines.last ?? ""
+        lock.unlock()
+        return Array(lines.dropLast())
+    }
+}
+
 // MARK: - Data types
 
 struct DownloadProgress: Identifiable {
@@ -15,6 +29,8 @@ struct DownloadProgress: Identifiable {
     var statusText: String
     var isComplete: Bool
     var error: String?
+    var canCancel: Bool = false
+    var isCancelled: Bool = false
 }
 
 struct ModelCatalogEntry: Identifiable {
@@ -70,6 +86,29 @@ actor LMStudioCLI {
     static let shared = LMStudioCLI()
     private init() {}
 
+    struct ListedModel: Decodable {
+        struct Quantization: Decodable {
+            let name: String?
+            let bits: Int?
+        }
+
+        let type: String?
+        let modelKey: String?
+        let displayName: String?
+        let publisher: String?
+        let path: String?
+        let sizeBytes: Int?
+        let indexedModelIdentifier: String?
+        let paramsString: String?
+        let architecture: String?
+        let quantization: Quantization?
+        let variants: [String]?
+        let selectedVariant: String?
+        let vision: Bool?
+        let trainedForToolUse: Bool?
+        let maxContextLength: Int?
+    }
+
     private let searchPaths: [String] = {
         let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
         return [
@@ -106,12 +145,26 @@ actor LMStudioCLI {
 
     func load(model: String) async throws {
         guard let bin = binaryPath else { throw CLIError.notInstalled }
-        try await run(bin, args: ["load", model])
+        try await run(bin, args: ["load", normalizedModelKey(model), "--yes"])
     }
 
     func unload(model: String) async throws {
         guard let bin = binaryPath else { throw CLIError.notInstalled }
-        try await run(bin, args: ["unload", model])
+        try await run(bin, args: ["unload", normalizedUnloadIdentifier(model)])
+    }
+
+    func listLibraryModels() async -> [LMStudioModel] {
+        guard let bin = binaryPath else { return [] }
+        let output = await runCommand(bin, args: ["ls", "--json"])
+        guard output.exitCode == 0 else { return [] }
+        return Self.parseLibraryModelsJSON(output.data)
+    }
+
+    func listLoadedModelIds() async -> Set<String> {
+        guard let bin = binaryPath else { return [] }
+        let output = await runCommand(bin, args: ["ps", "--json"])
+        guard output.exitCode == 0 else { return [] }
+        return Self.parseLoadedModelIdentifiersJSON(output.data)
     }
 
     // MARK: - Search via lms CLI (delegates to LMStudioCatalogService)
@@ -133,20 +186,7 @@ actor LMStudioCLI {
     // MARK: - Delete model from disk
 
     func deleteModel(id: String) async throws {
-        guard let bin = binaryPath else { throw CLIError.notInstalled }
-        // lms rm accepts either the full model id or just the filename stem
-        let modelName = id.components(separatedBy: "/").last?
-            .replacingOccurrences(of: ".gguf", with: "") ?? id
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: bin)
-        proc.arguments = ["rm", modelName]
-        proc.standardOutput = Pipe()
-        proc.standardError = Pipe()
-        try proc.run()
-        proc.waitUntilExit()
-        guard proc.terminationStatus == 0 else {
-            throw CLIError.commandFailed("rm \(modelName)", proc.terminationStatus)
-        }
+        throw CLIError.deleteNotSupported
     }
 
 
@@ -164,18 +204,17 @@ actor LMStudioCLI {
         proc.standardOutput = pipe
         proc.standardError = pipe
 
-        var buffer = ""
+        let lineBuffer = LMStudioDownloadLineBuffer()
         let key = entry.id.uuidString
 
         pipe.fileHandleForReading.readabilityHandler = { handle in
             let chunk = String(data: handle.availableData, encoding: .utf8) ?? ""
             guard !chunk.isEmpty else { return }
-            buffer += chunk
 
             // LM Studio CLI outputs lines like:
             //   "Downloading Qwen2.5-Coder-7B... 23.4%"
             //   "[=======>   ] 45%  12.3 MB/s"
-            let lines = buffer.components(separatedBy: "\n")
+            let lines = lineBuffer.append(chunk)
             for line in lines {
                 // Match percent: 0–100, optional decimal
                 let pctPattern = #"(\d{1,3}(?:\.\d+)?)\s*%"#
@@ -200,8 +239,6 @@ actor LMStudioCLI {
                     onProgress(prog)
                 }
             }
-            // Keep last incomplete line in buffer
-            buffer = lines.last ?? ""
         }
 
         try proc.run()
@@ -225,33 +262,106 @@ actor LMStudioCLI {
     // MARK: - Helpers
 
     private func run(_ bin: String, args: [String]) async throws {
+        let result = await runCommand(bin, args: args)
+        guard result.exitCode == 0 else {
+            throw CLIError.commandFailed(args.joined(separator: " "), result.exitCode, result.output)
+        }
+    }
+
+    private func runCommand(_ bin: String, args: [String]) async -> (exitCode: Int32, output: String, data: Data) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: bin)
         proc.arguments = args
-        proc.standardOutput = Pipe() // suppress output
-        proc.standardError = Pipe()
-        try proc.run()
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+        try? proc.run()
         proc.waitUntilExit()
-        guard proc.terminationStatus == 0 else {
-            throw CLIError.commandFailed(args.joined(separator: " "), proc.terminationStatus)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        return (proc.terminationStatus, output, data)
+    }
+
+    nonisolated static func parseLibraryModelsJSON(_ data: Data) -> [LMStudioModel] {
+        guard let decoded = try? JSONDecoder().decode([ListedModel].self, from: data) else { return [] }
+        return decoded.map { model in
+            let resolvedId = model.selectedVariant
+                ?? model.indexedModelIdentifier
+                ?? model.path
+                ?? model.modelKey
+                ?? model.displayName
+                ?? UUID().uuidString
+            let type = normalizeModelType(model.type, vision: model.vision, toolUse: model.trainedForToolUse)
+            return LMStudioModel(
+                id: resolvedId,
+                type: type,
+                publisher: model.publisher,
+                contextLength: model.maxContextLength,
+                state: "not-loaded"
+            )
         }
+    }
+
+    nonisolated static func parseLoadedModelIdentifiersJSON(_ data: Data) -> Set<String> {
+        guard let raw = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        if let array = raw as? [[String: Any]] {
+            let ids = array.compactMap { row -> String? in
+                row["identifier"] as? String
+                ?? row["id"] as? String
+                ?? row["modelKey"] as? String
+                ?? row["path"] as? String
+            }
+            return Set(ids)
+        }
+        return []
+    }
+
+    private func normalizedModelKey(_ model: String) -> String {
+        if let atIndex = model.firstIndex(of: "@") {
+            return String(model[..<atIndex])
+        }
+        if model.localizedCaseInsensitiveContains(".gguf") {
+            let trimmed = model.components(separatedBy: "/").dropLast().joined(separator: "/")
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return model
+    }
+
+    private func normalizedUnloadIdentifier(_ model: String) -> String {
+        if let selected = model.split(separator: "/").last, selected.localizedCaseInsensitiveContains(".gguf") {
+            return model.replacingOccurrences(of: ".gguf", with: "")
+        }
+        return model
+    }
+
+    nonisolated private static func normalizeModelType(_ type: String?, vision: Bool?, toolUse: Bool?) -> String {
+        if let type, !type.isEmpty { return type }
+        if vision == true { return "vlm" }
+        if toolUse == true { return "tools" }
+        return "llm"
     }
 
     // MARK: - Errors
 
     enum CLIError: LocalizedError {
         case notInstalled
-        case commandFailed(String, Int32)
+        case commandFailed(String, Int32, String)
         case downloadFailed(Int32)
+        case deleteNotSupported
 
         var errorDescription: String? {
             switch self {
             case .notInstalled:
-                return "lms CLI not found.\nEnable it in: LM Studio → Settings → Local Server → Install CLI Tool"
-            case .commandFailed(let cmd, let code):
-                return "lms \(cmd) failed (exit \(code))"
+                return "lms CLI not found.\nEnable it in: LLM Studio → Settings → Local Server → Install CLI Tool"
+            case .commandFailed(let cmd, let code, let output):
+                let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty
+                    ? "lms \(cmd) failed (exit \(code))"
+                    : "lms \(cmd) failed (exit \(code)): \(trimmed)"
             case .downloadFailed(let code):
                 return "Download failed (exit \(code))"
+            case .deleteNotSupported:
+                return "Delete from disk requires the LLM Studio local server API. The installed lms CLI does not support model deletion."
             }
         }
     }

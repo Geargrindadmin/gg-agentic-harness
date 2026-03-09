@@ -98,9 +98,9 @@ final class LMStudioCatalogService: ObservableObject {
         } else if featuredModels.isEmpty {
             // Last resort: use built-in seed data so the UI isn't empty
             featuredModels = seedCatalog
-            lastError = "Unable to refresh LM Studio catalog. Showing built-in defaults."
+            lastError = "Unable to refresh LLM Studio catalog. Showing built-in defaults."
         } else {
-            lastError = "Unable to refresh LM Studio catalog. Showing cached results."
+            lastError = "Unable to refresh LLM Studio catalog. Showing cached results."
         }
 
         isLoading = false
@@ -123,6 +123,32 @@ final class LMStudioCatalogService: ObservableObject {
             searchResults = results
             isSearching = false
         }
+    }
+
+    func resolveSearchCandidate(query: String) async -> CatalogModel? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let results = await performSearch(query: trimmed)
+        guard !results.isEmpty else { return nil }
+
+        let normalized = trimmed.lowercased()
+        if let exact = results.first(where: {
+            $0.name.lowercased() == normalized
+            || $0.id.lowercased() == normalized
+            || $0.hfRef.lowercased() == normalized
+        }) {
+            return exact
+        }
+
+        if let repoMatch = results.first(where: { $0.repo.lowercased().contains(normalized) }) {
+            return repoMatch
+        }
+
+        if let nameMatch = results.first(where: { $0.name.lowercased().contains(normalized) }) {
+            return nameMatch
+        }
+
+        return results.first
     }
 
     /// Parse a direct HuggingFace or lmstudio.ai URL into a CatalogModel for immediate download.

@@ -1,11 +1,14 @@
 ---
-generated_at: "2026-03-08"
+generated_at: "2026-03-09"
 generator: "scripts/generate-project-context.mjs"
 source_files:
   - "package.json"
   - "mcp-servers/gg-skills/package.json"
   - "packages/gg-cli/package.json"
+  - "packages/gg-control-plane-server/package.json"
   - "packages/gg-core/package.json"
+  - "packages/gg-orchestrator/package.json"
+  - "packages/gg-runtime-adapters/package.json"
 ---
 
 # Project Context for AI Agents

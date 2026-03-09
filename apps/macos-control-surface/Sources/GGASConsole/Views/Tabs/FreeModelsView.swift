@@ -4,9 +4,11 @@ import AppKit
 struct FreeModelsView: View {
     @EnvironmentObject private var shell: AppShellState
     @State private var catalog: FreeModelsCatalogModel?
+    @State private var fitSnapshot: ModelFitSnapshotModel?
     @State private var filter = ""
     @State private var isLoading = false
     @State private var error: String?
+    @State private var pendingLaunchDecision: FreeModelLaunchDecision?
 
     private var filteredProviders: [FreeModelProviderModel] {
         guard let catalog else { return [] }
@@ -61,6 +63,30 @@ struct FreeModelsView: View {
         .task {
             await refresh()
         }
+        .confirmationDialog(
+            pendingLaunchDecision?.title ?? "Model Fit Warning",
+            isPresented: Binding(
+                get: { pendingLaunchDecision != nil },
+                set: { if !$0 { pendingLaunchDecision = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let pendingLaunchDecision {
+                Button("Open in LLM Studio Anyway") {
+                    shell.openLMStudioCatalog(query: pendingLaunchDecision.query, autoDownload: true)
+                    self.pendingLaunchDecision = nil
+                }
+                Button("Open Model Fit") {
+                    shell.selectedTab = .modelFit
+                    self.pendingLaunchDecision = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingLaunchDecision = nil
+            }
+        } message: {
+            Text(pendingLaunchDecision?.message ?? "")
+        }
     }
 
     private var header: some View {
@@ -69,7 +95,7 @@ struct FreeModelsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Free Coding Models")
                         .font(.headline.bold())
-                    Text("Track free provider offerings and jump directly into LM Studio search for models that look useful.")
+                    Text("Track free provider offerings and send promising models into LLM Studio with a local fit check before download.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -140,22 +166,7 @@ struct FreeModelsView: View {
             }
 
             ForEach(provider.models.prefix(8)) { model in
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(model.label)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(model.id) • SWE: \(model.sweScore) • Context: \(model.context)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Find in LM Studio") {
-                        shell.openLMStudioCatalog(query: model.label)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                .padding(.vertical, 2)
+                modelRow(model)
             }
 
             if provider.models.count > 8 {
@@ -176,6 +187,38 @@ struct FreeModelsView: View {
         )
     }
 
+    @ViewBuilder
+    private func modelRow(_ model: FreeModelEntryModel) -> some View {
+        let fitAssessment = assessFit(for: model)
+        let actionButton = Button(fitAssessment.requiresConfirmation ? "Review Fit" : "Open in LLM Studio") {
+            handleStudioLaunch(for: model, assessment: fitAssessment)
+        }
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.label)
+                    .font(.system(size: 12, weight: .medium))
+                Text("\(model.id) • SWE: \(model.sweScore) • Context: \(model.context)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(fitAssessment.summary)
+                    .font(.caption2)
+                    .foregroundStyle(fitAssessment.color)
+            }
+            Spacer()
+            fitBadge(fitAssessment)
+            if fitAssessment.requiresConfirmation {
+                actionButton
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            } else {
+                actionButton
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
     private func summaryChip(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
@@ -191,14 +234,110 @@ struct FreeModelsView: View {
         )
     }
 
+    @ViewBuilder
+    private func fitBadge(_ assessment: FreeModelFitAssessment) -> some View {
+        Text(assessment.label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(assessment.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(assessment.color.opacity(0.10), in: Capsule())
+    }
+
     private func refresh() async {
         isLoading = true
         defer { isLoading = false }
         do {
-            catalog = try await A2AClient.shared.fetchFreeModelsCatalog()
+            async let catalogTask = A2AClient.shared.fetchFreeModelsCatalog()
+            async let fitTask = A2AClient.shared.fetchModelFitRecommendations(limit: 24)
+            catalog = try await catalogTask
+            fitSnapshot = try? await fitTask
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
     }
+
+    private func handleStudioLaunch(for model: FreeModelEntryModel, assessment: FreeModelFitAssessment) {
+        let launchQuery = bestFitRecommendation(for: model)?.lmStudioQuery ?? model.label
+        if assessment.requiresConfirmation {
+            pendingLaunchDecision = FreeModelLaunchDecision(
+                title: "Model Fit Review",
+                query: launchQuery,
+                message: assessment.warningMessage
+            )
+        } else {
+            shell.openLMStudioCatalog(query: launchQuery, autoDownload: true)
+        }
+    }
+
+    private func assessFit(for model: FreeModelEntryModel) -> FreeModelFitAssessment {
+        if let recommendation = bestFitRecommendation(for: model) {
+            let fitLevel = recommendation.fitLevel.lowercased()
+            let summary = "\(recommendation.shortName) • \(recommendation.fitLevel.capitalized) fit • \(String(format: "%.1f", recommendation.memoryRequiredGb)) GB needed / \(String(format: "%.1f", recommendation.memoryAvailableGb)) GB available"
+            if ["excellent", "great", "good", "okay"].contains(fitLevel) {
+                return FreeModelFitAssessment(
+                    label: recommendation.fitLevel.capitalized,
+                    summary: summary,
+                    color: fitLevel == "okay" ? .orange : .green,
+                    requiresConfirmation: false,
+                    warningMessage: summary
+                )
+            }
+            return FreeModelFitAssessment(
+                label: "Review Fit",
+                summary: summary,
+                color: .orange,
+                requiresConfirmation: true,
+                warningMessage: "\(summary)\n\nIf you are planning to split this model across multiple Firewire or networked machines, hold off on the local download for now. Multi-machine split loading is planned for a later release."
+            )
+        }
+
+        return FreeModelFitAssessment(
+            label: "Unverified",
+            summary: "No local llmfit recommendation yet. Review the fit before downloading in LLM Studio.",
+            color: .secondary,
+            requiresConfirmation: true,
+            warningMessage: "This model is not currently matched to a local llmfit recommendation on this machine.\n\nOpen Model Fit if you want to review local hardware guidance first. Multi-machine split loading over Firewire/networked machines is planned for a later release."
+        )
+    }
+
+    private func bestFitRecommendation(for model: FreeModelEntryModel) -> ModelFitRecommendationModel? {
+        guard let fitSnapshot else { return nil }
+        let modelTokens = normalizedSearchTokens([model.label, model.id])
+        return fitSnapshot.recommendations.first(where: { recommendation in
+            let recTokens = normalizedSearchTokens([recommendation.name, recommendation.shortName, recommendation.lmStudioQuery])
+            return !modelTokens.isDisjoint(with: recTokens)
+        })
+    }
+
+    private func normalizedSearchTokens(_ values: [String]) -> Set<String> {
+        var tokens = Set<String>()
+        for value in values {
+            let normalized = value.lowercased()
+                .replacingOccurrences(of: "/", with: " ")
+                .replacingOccurrences(of: "-", with: " ")
+                .replacingOccurrences(of: "_", with: " ")
+            for token in normalized.split(separator: " ") where token.count >= 3 {
+                tokens.insert(String(token))
+            }
+        }
+        return tokens
+    }
+}
+
+private struct FreeModelLaunchDecision: Identifiable {
+    let title: String
+    let query: String
+    let message: String
+
+    var id: String { query }
+}
+
+private struct FreeModelFitAssessment {
+    let label: String
+    let summary: String
+    let color: Color
+    let requiresConfirmation: Bool
+    let warningMessage: String
 }

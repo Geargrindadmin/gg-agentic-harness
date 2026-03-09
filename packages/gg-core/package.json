@@ -14,6 +14,6 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test": "node -e \"console.log('gg-core: no tests yet')\""
+    "test": "npm run build && node --test test/*.test.mjs"
   }
 }

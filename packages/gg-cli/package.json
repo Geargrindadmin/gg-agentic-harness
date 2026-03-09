@@ -11,6 +11,6 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test": "node -e \"console.log('gg-cli: no tests yet')\""
+    "test": "npm run build --workspace=@geargrind/gg-core --workspace=@geargrind/gg-runtime-adapters --workspace=@geargrind/gg-orchestrator && npm run build && node --test test/*.test.mjs"
   }
 }

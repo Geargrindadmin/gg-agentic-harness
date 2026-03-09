@@ -58,6 +58,7 @@ final class SetupWizardVM: ObservableObject {
     @Published var installProjectsStatus: StepStatus = .pending
     @Published var output: [CLILine] = []
     @Published var isComplete = false
+    @Published var runtimeDiscovery: A2AClient.RuntimeDiscoveryResponse? = nil
 
     /// Extra project folders to install the agentic layer into
     @Published var targetProjects: [String] = []
@@ -72,9 +73,15 @@ final class SetupWizardVM: ObservableObject {
     /// API keys entered in the wizard
     @Published var anthropicAPIKey: String = ""
     @Published var moonshotAPIKey:  String = ""
+    @Published var openAIAPIKey:    String = ""
+    @Published var geminiAPIKey:    String = ""
 
     struct CLILine: Identifiable {
         let id = UUID(); let text: String; let isError: Bool
+    }
+
+    func refreshRuntimeDiscovery() async {
+        runtimeDiscovery = try? await A2AClient.shared.fetchRuntimeDiscovery()
     }
 
     func advance() async {
@@ -372,7 +379,12 @@ final class SetupWizardVM: ObservableObject {
         if let existing = try? String(contentsOfFile: envFile, encoding: .utf8) {
             lines = existing.split(separator: "\n", omittingEmptySubsequences: false)
                 .map(String.init)
-                .filter { !$0.hasPrefix("export ANTHROPIC_API_KEY=") && !$0.hasPrefix("export MOONSHOT_API_KEY=") }
+                .filter {
+                    !$0.hasPrefix("export ANTHROPIC_API_KEY=")
+                    && !$0.hasPrefix("export MOONSHOT_API_KEY=")
+                    && !$0.hasPrefix("export OPENAI_API_KEY=")
+                    && !$0.hasPrefix("export GEMINI_API_KEY=")
+                }
         }
 
         if !anthropicAPIKey.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -383,6 +395,14 @@ final class SetupWizardVM: ObservableObject {
             lines.append("export MOONSHOT_API_KEY=\"\(moonshotAPIKey.trimmingCharacters(in: .whitespaces))\"")
             log("✓ MOONSHOT_API_KEY saved to ~/.ggas/env")
         }
+        if !openAIAPIKey.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.append("export OPENAI_API_KEY=\"\(openAIAPIKey.trimmingCharacters(in: .whitespaces))\"")
+            log("✓ OPENAI_API_KEY saved to ~/.ggas/env")
+        }
+        if !geminiAPIKey.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.append("export GEMINI_API_KEY=\"\(geminiAPIKey.trimmingCharacters(in: .whitespaces))\"")
+            log("✓ GEMINI_API_KEY saved to ~/.ggas/env")
+        }
 
         try? FileManager.default.createDirectory(atPath: envDir, withIntermediateDirectories: true)
         let content = lines.joined(separator: "\n") + "\n"
@@ -391,7 +411,9 @@ final class SetupWizardVM: ObservableObject {
         // Persist to UserDefaults so ConfigView can read them back (keys marked, values stored)
         APIKeyStore.shared.save(
             anthropic: anthropicAPIKey.trimmingCharacters(in: .whitespaces),
-            moonshot:  moonshotAPIKey.trimmingCharacters(in: .whitespaces)
+            moonshot:  moonshotAPIKey.trimmingCharacters(in: .whitespaces),
+            openAI:    openAIAPIKey.trimmingCharacters(in: .whitespaces),
+            gemini:    geminiAPIKey.trimmingCharacters(in: .whitespaces)
         )
 
         // Re-wire gg-agent-bridge with API keys injected as env vars
@@ -805,6 +827,8 @@ struct SetupWizardView: View {
     // Show/hide toggles for API key fields (SecureField blocks ⌘V on macOS)
     @State private var showAnthropicKey = false
     @State private var showMoonshotKey  = false
+    @State private var showOpenAIKey    = false
+    @State private var showGeminiKey    = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -889,6 +913,12 @@ struct SetupWizardView: View {
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .padding(.horizontal, 16).padding(.top, 8)
+            }
+
+            if vm.currentStep == .welcome || vm.currentStep == .apiKeys {
+                runtimeAuditCard
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
             }
 
             // Install directory picker — shown on Claude and Kimi steps
@@ -988,7 +1018,57 @@ struct SetupWizardView: View {
                         }
                     }
 
-                    Text("Keys are saved to ~/.ggas/env and injected into MCP servers. You can update them later in Config → API Keys.")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("OpenAI API Key (Codex)").font(.caption.bold())
+                        HStack(spacing: 6) {
+                            Group {
+                                if showOpenAIKey {
+                                    TextField("sk-proj-…", text: $vm.openAIAPIKey)
+                                } else {
+                                    SecureField("sk-proj-…", text: $vm.openAIAPIKey)
+                                }
+                            }
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                            Button {
+                                showOpenAIKey.toggle()
+                            } label: {
+                                Image(systemName: showOpenAIKey ? "eye.slash" : "eye")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            if let url = URL(string: "https://platform.openai.com/api-keys") {
+                                Link("Get ↗", destination: url).font(.caption2).foregroundStyle(.blue)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Gemini API Key").font(.caption.bold())
+                        HStack(spacing: 6) {
+                            Group {
+                                if showGeminiKey {
+                                    TextField("AIza…", text: $vm.geminiAPIKey)
+                                } else {
+                                    SecureField("AIza…", text: $vm.geminiAPIKey)
+                                }
+                            }
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                            Button {
+                                showGeminiKey.toggle()
+                            } label: {
+                                Image(systemName: showGeminiKey ? "eye.slash" : "eye")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            if let url = URL(string: "https://aistudio.google.com/apikey") {
+                                Link("Get ↗", destination: url).font(.caption2).foregroundStyle(.blue)
+                            }
+                        }
+                    }
+
+                    Text("Keys are saved to ~/.ggas/env. Local OAuth CLI sessions still take precedence when available, and you can update all credentials later in Config → Credentials.")
                         .font(.caption2).foregroundStyle(.tertiary)
                 }
                 .padding(12)
@@ -1097,6 +1177,7 @@ struct SetupWizardView: View {
         }
         .frame(width: 560, height: 600)
         .background(Color(NSColor.windowBackgroundColor))
+        .task { await vm.refreshRuntimeDiscovery() }
     }
 
     private var subtitle: String {
@@ -1106,7 +1187,7 @@ struct SetupWizardView: View {
         case .nodejs:              return "Node.js 20 LTS is required to run the harness control-plane and macOS control surface."
         case .claude:              return "Claude Code CLI is Anthropic's AI coding agent used to coordinate tasks."
         case .kimi:                return "Kimi Code 3.5 CLI is Moonshot AI's coding agent used for parallel swarms."
-        case .apiKeys:             return "API keys let the harness run Claude and Kimi autonomously without any interactive login.\nYou can skip this and add keys later in Config → API Keys."
+        case .apiKeys:             return "Local authenticated CLIs are preferred. Add API keys here only for direct-provider fallback or unattended runs where no OAuth session exists."
         case .setup:               return "Building MCP servers, generating config files, and installing the agent constitution (CLAUDE.md, KIMI.md, AGENTS.md) into your project. Runs after Claude/Kimi installs to avoid overwriting MCP registrations."
         case .installIntoProjects: return "Optionally install the GearGrind agentic layer (skills, workflows, rules, GEMINI.md, .mcp.json) into other projects on this machine so they benefit from the same agent tooling."
         case .done:                return "All dependencies installed. Click Launch to start using GearGrind Agentic System."
@@ -1120,7 +1201,13 @@ struct SetupWizardView: View {
         case .nodejs:              return "Install Node.js"
         case .claude:              return "Install Claude Code"
         case .kimi:                return "Install Kimi Code"
-        case .apiKeys:             return vm.anthropicAPIKey.isEmpty && vm.moonshotAPIKey.isEmpty ? "Skip & Wire Project" : "Save Keys & Wire Project"
+        case .apiKeys:
+            return vm.anthropicAPIKey.isEmpty
+                && vm.moonshotAPIKey.isEmpty
+                && vm.openAIAPIKey.isEmpty
+                && vm.geminiAPIKey.isEmpty
+                ? "Skip & Wire Project"
+                : "Save Keys & Wire Project"
         case .setup:               return "Wire Project"
         case .installIntoProjects: return vm.targetProjects.isEmpty ? "Skip — No Projects Selected" : "Install into \(vm.targetProjects.count) Project(s)"
         case .done:                return "Launch GearGrind"
@@ -1174,6 +1261,66 @@ struct SetupWizardView: View {
         case .failed:     return .red
         case .running:    return .yellow
         case .pending:    return .secondary.opacity(0.4)
+        }
+    }
+
+    @ViewBuilder
+    private var runtimeAuditCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Detected Runtime Access", systemImage: "checklist")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            if let discovery = vm.runtimeDiscovery {
+                Text("Auto coordinator: \(discovery.coordinatorSelection.selected.capitalized)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ForEach(discovery.discoveries) { entry in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: runtimeIcon(entry.runtime))
+                            .foregroundStyle(entry.authenticated ? .green : .orange)
+                            .frame(width: 16)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.runtime.capitalized)
+                                .font(.caption.bold())
+                            Text(entry.summary)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if !entry.sources.isEmpty {
+                                Text(entry.sources.prefix(2).map { $0.detail }.joined(separator: " · "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(2)
+                            }
+                        }
+                        Spacer()
+                        Text(entry.localCliAuth ? "OAuth / CLI" : entry.directApiAvailable ? "API fallback" : "Needs setup")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(entry.localCliAuth ? .green : entry.directApiAvailable ? .blue : .orange)
+                    }
+                    .padding(.vertical, 2)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.7)
+                    Text("Scanning installed CLIs and credential stores…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func runtimeIcon(_ runtime: String) -> String {
+        switch runtime.lowercased() {
+        case "claude": return "sparkles"
+        case "codex": return "circle.hexagonpath.fill"
+        case "kimi": return "bolt.fill"
+        default: return "cpu"
         }
     }
 }

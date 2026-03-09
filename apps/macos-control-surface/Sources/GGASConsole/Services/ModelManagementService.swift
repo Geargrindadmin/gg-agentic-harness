@@ -2,6 +2,58 @@
 
 import Foundation
 
+private final class ManagedDownloadProcess: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+
+    func setProcess(_ process: Process) {
+        lock.lock()
+        self.process = process
+        let shouldCancel = cancelled
+        lock.unlock()
+        if shouldCancel {
+            interrupt(process)
+        }
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let process = self.process
+        lock.unlock()
+        interrupt(process)
+    }
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    private func interrupt(_ process: Process?) {
+        guard let process else { return }
+        if process.isRunning {
+            process.interrupt()
+            process.terminate()
+        }
+    }
+}
+
+private final class DownloadLineBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer = ""
+
+    func append(_ chunk: String) -> [String] {
+        lock.lock()
+        buffer += chunk
+        let lines = buffer.components(separatedBy: "\n")
+        buffer = lines.last ?? ""
+        lock.unlock()
+        return Array(lines.dropLast())
+    }
+}
+
 // MARK: - System Stats
 
 struct LMSystemStats {
@@ -34,6 +86,7 @@ final class ModelManagementService: ObservableObject {
     @Published var lastError: String?
 
     private var statsTask: Task<Void, Never>?
+    private var downloadControllers: [String: ManagedDownloadProcess] = [:]
     private init() {}
 
     // MARK: - System Stats polling
@@ -54,7 +107,7 @@ final class ModelManagementService: ObservableObject {
     }
 
     func refreshStats(endpoint: String) async {
-        // Try LM Studio REST /api/v0/system first
+        // Try LLM Studio REST /api/v0/system first
         if let stats = await fetchRESTStats(endpoint: endpoint) {
             systemStats = stats
             return
@@ -116,10 +169,10 @@ final class ModelManagementService: ObservableObject {
 
     // MARK: - Delete model
 
-    /// Delete a model from the LM Studio library (not loaded in VRAM).
+    /// Delete a model from the LLM Studio library (not loaded in VRAM).
     /// Tries REST API first, falls back to `lms rm` CLI.
     func deleteModel(id: String, endpoint: String) async throws {
-        // 1. Try REST (LM Studio >= 0.3.6)
+        // 1. Try REST (LLM Studio >= 0.3.6)
         if await deleteViaREST(id: id, endpoint: endpoint) { return }
         // 2. Fall back to lms rm
         try await deleteViaCLI(id: id)
@@ -165,11 +218,19 @@ final class ModelManagementService: ObservableObject {
                                   key: key, onProgress: onProgress)
     }
 
+    func cancelDownload(id: String) {
+        downloadControllers[id]?.cancel()
+    }
+
     private func downloadViaLMS(hfRef: String, modelName: String, key: String,
                                  onProgress: @escaping @MainActor (DownloadProgress) -> Void) async throws {
         guard let bin = LMStudioCLI.shared.binaryPath else {
             throw ManagementError.cliNotAvailable
         }
+        let controller = ManagedDownloadProcess()
+        downloadControllers[key] = controller
+        defer { downloadControllers.removeValue(forKey: key) }
+
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: bin)
         proc.arguments = ["get", hfRef]
@@ -177,13 +238,13 @@ final class ModelManagementService: ObservableObject {
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = pipe
-        var buffer = ""
+        controller.setProcess(proc)
+        let lineBuffer = DownloadLineBuffer()
 
         pipe.fileHandleForReading.readabilityHandler = { handle in
             let chunk = String(data: handle.availableData, encoding: .utf8) ?? ""
             guard !chunk.isEmpty else { return }
-            buffer += chunk
-            let lines = buffer.components(separatedBy: "\n")
+            let lines = lineBuffer.append(chunk)
             for line in lines {
                 let pctPattern = #"(\d{1,3}(?:\.\d+)?)\s*%"#
                 if let range = line.range(of: pctPattern, options: .regularExpression) {
@@ -197,23 +258,60 @@ final class ModelManagementService: ObservableObject {
                     let prog = DownloadProgress(id: key, modelName: modelName,
                                                 fraction: fraction,
                                                 statusText: "Downloading… \(speed)",
-                                                isComplete: false, error: nil)
+                                                isComplete: false, error: nil,
+                                                canCancel: true)
                     Task { @MainActor in onProgress(prog) }
                 }
             }
-            buffer = lines.last ?? ""
         }
 
-        try proc.run()
-        proc.waitUntilExit()
-        pipe.fileHandleForReading.readabilityHandler = nil
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        if controller.isCancelled {
+                            continuation.resume(throwing: ManagementError.downloadCancelled)
+                            return
+                        }
+                        try proc.run()
+                        proc.waitUntilExit()
+                        pipe.fileHandleForReading.readabilityHandler = nil
 
-        if proc.terminationStatus != 0 {
-            throw ManagementError.deleteFailed("lms get exited \(proc.terminationStatus)")
+                        if controller.isCancelled {
+                            continuation.resume(throwing: ManagementError.downloadCancelled)
+                        } else if proc.terminationStatus != 0 {
+                            continuation.resume(throwing: ManagementError.downloadFailed("lms get exited \(proc.terminationStatus)"))
+                        } else {
+                            continuation.resume()
+                        }
+                    } catch {
+                        pipe.fileHandleForReading.readabilityHandler = nil
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+        } catch {
+            if case ManagementError.downloadCancelled = error {
+                let cancelled = DownloadProgress(id: key, modelName: modelName,
+                                                fraction: 0,
+                                                statusText: "Cancelled",
+                                                isComplete: false,
+                                                error: nil,
+                                                canCancel: false,
+                                                isCancelled: true)
+                await MainActor.run {
+                    onProgress(cancelled)
+                }
+            }
+            throw error
         }
+
         let done = DownloadProgress(id: key, modelName: modelName, fraction: 1.0,
-                                    statusText: "Complete ✓", isComplete: true, error: nil)
-        await onProgress(done)
+                                    statusText: "Complete ✓", isComplete: true, error: nil,
+                                    canCancel: false)
+        await MainActor.run {
+            onProgress(done)
+        }
     }
 
     // MARK: - Helper
@@ -239,13 +337,19 @@ final class ModelManagementService: ObservableObject {
     enum ManagementError: LocalizedError {
         case cliNotAvailable
         case deleteFailed(String)
+        case downloadFailed(String)
+        case downloadCancelled
 
         var errorDescription: String? {
             switch self {
             case .cliNotAvailable:
-                return "lms CLI not available. Enable it in LM Studio → Settings → Local Server → Install CLI Tool"
+                return "lms CLI not available. Enable it in LLM Studio → Settings → Local Server → Install CLI Tool"
             case .deleteFailed(let msg):
                 return "Delete failed: \(msg)"
+            case .downloadFailed(let msg):
+                return "Download failed: \(msg)"
+            case .downloadCancelled:
+                return "Download cancelled"
             }
         }
     }

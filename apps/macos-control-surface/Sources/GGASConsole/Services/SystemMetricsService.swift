@@ -78,14 +78,19 @@ final class SystemMetricsService: ObservableObject {
         var userDiff: Int64 = 0; var sysDiff: Int64 = 0
         var idleDiff: Int64 = 0; var niceDiff: Int64 = 0
 
-        for i in 0..<Int(numCPUs) {
-            let base = Int(CPU_STATE_MAX) * i
+        let statesPerCPU = Int(CPU_STATE_MAX)
+        let availableCPUSlots = Int(numCPUInfo) / statesPerCPU
+        let currentCPUCount = min(Int(numCPUs), availableCPUSlots)
+        let previousCPUSlots = Int(prevNumCPUInfo) / statesPerCPU
+
+        for i in 0..<currentCPUCount {
+            let base = statesPerCPU * i
             let user   = Int64(cpuInfo[base + Int(CPU_STATE_USER)])
             let system = Int64(cpuInfo[base + Int(CPU_STATE_SYSTEM)])
             let idle   = Int64(cpuInfo[base + Int(CPU_STATE_IDLE)])
             let nice   = Int64(cpuInfo[base + Int(CPU_STATE_NICE)])
 
-            if let prev = prevCPUInfo {
+            if let prev = prevCPUInfo, i < previousCPUSlots {
                 let pu = Int64(prev[base + Int(CPU_STATE_USER)])
                 let ps = Int64(prev[base + Int(CPU_STATE_SYSTEM)])
                 let pi = Int64(prev[base + Int(CPU_STATE_IDLE)])

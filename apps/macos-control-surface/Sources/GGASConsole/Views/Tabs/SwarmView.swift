@@ -172,15 +172,18 @@ struct SwarmView: View {
     // Delegate ALL polling to AgentMonitorService — this view is display-only (Phase 2)
     @ObservedObject private var monitor   = AgentMonitorService.shared
     @ObservedObject private var swarmModel = AgentSwarmModel.shared
+    @EnvironmentObject private var shell: AppShellState
     @EnvironmentObject private var workflow: WorkflowContextStore
     @State private var currentSizes = SwarmSizes.base
     @State private var availableSize: CGSize = .zero
     @State private var graphMode = true   // Phase 5: true = topology graph, false = bubble tree
     @State private var selectedRunId = ""
     @State private var selectedAgentId = ""
+    @State private var selectedTopologyNodeId: String?
     @State private var guidanceText = ""
     @State private var retaskText = ""
     @State private var actionStatus: String?
+    @State private var consoleTarget: WorkerConsoleTarget?
 
     // Derived view data — computed from AgentMonitorService.busStatuses
     private var busStatuses: [BusRunStatus] {
@@ -250,6 +253,24 @@ struct SwarmView: View {
         .onChange(of: workflow.selectedRunId) { _, _ in
             syncSelection()
         }
+        .sheet(item: $consoleTarget) { target in
+            WorkerConsoleSheet(
+                target: target,
+                onSendGuidance: { message in
+                    try await A2AClient.shared.sendWorkerGuidance(
+                        runId: target.runId,
+                        agentId: target.agentId,
+                        message: message
+                    )
+                },
+                onOpenFiles: {
+                    WorktreePanelController.shared.open(
+                        agentId: target.agentId,
+                        worktreePath: target.worktreePath
+                    )
+                }
+            )
+        }
     }
 
 
@@ -272,7 +293,24 @@ struct SwarmView: View {
             emptyState
         } else if graphMode {
             // Phase 5: Canvas-based topology graph
-            TopologyGraphView(swarmModel: swarmModel)
+            TopologyGraphView(
+                swarmModel: swarmModel,
+                selectedNodeId: selectedTopologyNodeId,
+                onSelectNode: { node in
+                    selectedTopologyNodeId = node.id
+                    focusNode(node)
+                },
+                onOpenConsole: { node in
+                    selectedTopologyNodeId = node.id
+                    focusNode(node)
+                    openConsole(for: node)
+                },
+                onOpenFiles: { node in
+                    selectedTopologyNodeId = node.id
+                    focusNode(node)
+                    openFiles(for: node)
+                }
+            )
                 .background(Color(NSColor.underPageBackgroundColor))
         } else {
             GeometryReader { geo in
@@ -365,7 +403,22 @@ struct SwarmView: View {
                                      ringColor: personaRingColor(for: w.label),
                                      worktreePath: w.worktreePath,
                                      agentId: w.id,
-                                     runId: mgr.id)
+                                     runId: mgr.id,
+                                     onOpenConsole: {
+                                         selectedTopologyNodeId = w.id
+                                         selectedRunId = mgr.id
+                                         selectedAgentId = w.id
+                                         guidanceText = w.summary
+                                         if retaskText.isEmpty { retaskText = w.summary }
+                                         consoleTarget = WorkerConsoleTarget(
+                                             runId: mgr.id,
+                                             agentId: w.id,
+                                             label: shortWorkerLabel(w.label),
+                                             subtitle: w.runtime.map(shortRuntimeLabel) ?? w.personaId,
+                                             worktreePath: w.worktreePath
+                                                ?? "\(ProjectSettings.shared.projectRoot)/.agent/control-plane/worktrees/\(mgr.id)/\(w.id)"
+                                         )
+                                     })
                         .transition(.scale(scale: 0.3).combined(with: .opacity).animation(.easeOut(duration: 0.20)))
                     }
                 }
@@ -776,6 +829,19 @@ struct SwarmView: View {
                         .lineLimit(4)
                 }
                 HStack(spacing: 8) {
+                    Button("Live Console") {
+                        consoleTarget = WorkerConsoleTarget(
+                            runId: selected.runId,
+                            agentId: selected.agentId,
+                            label: selected.agentId,
+                            subtitle: selected.worker.runtime.map(shortRuntimeLabel) ?? selected.worker.personaId,
+                            worktreePath: selected.worker.worktreePath
+                                ?? "\(ProjectSettings.shared.projectRoot)/.agent/control-plane/worktrees/\(selected.runId)/\(selected.agentId)"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
                     Button("View Worktree") {
                         WorktreePanelController.shared.open(
                             agentId: selected.agentId,
@@ -846,6 +912,7 @@ struct SwarmView: View {
                 guard parts.count == 2 else { return }
                 selectedRunId = parts[0]
                 selectedAgentId = parts[1]
+                selectedTopologyNodeId = parts[1]
                 if let selected = selectedWorker {
                     guidanceText = selected.worker.currentTask ?? guidanceText
                     if retaskText.isEmpty {
@@ -862,6 +929,7 @@ struct SwarmView: View {
            let match = flattenedWorkers.first(where: { $0.runId == runId }) {
             selectedRunId = match.runId
             selectedAgentId = match.agentId
+            selectedTopologyNodeId = match.agentId
             guidanceText = match.worker.currentTask ?? guidanceText
             retaskText = retaskText.isEmpty ? (match.worker.currentTask ?? "") : retaskText
             return
@@ -869,9 +937,64 @@ struct SwarmView: View {
         if selectedWorker == nil {
             selectedRunId = flattenedWorkers[0].runId
             selectedAgentId = flattenedWorkers[0].agentId
+            selectedTopologyNodeId = flattenedWorkers[0].agentId
             guidanceText = flattenedWorkers[0].worker.currentTask ?? ""
             retaskText = flattenedWorkers[0].worker.currentTask ?? ""
         }
+    }
+
+    private func focusNode(_ node: ResourceNode) {
+        guard let runId = node.runId, let agentId = node.agentId, !runId.isEmpty, !agentId.isEmpty else {
+            return
+        }
+        selectedRunId = runId
+        selectedAgentId = agentId
+        shell.focusWorktree(
+            path: resolvedWorktreePath(runId: runId, agentId: agentId, providedPath: node.worktreePath),
+            label: node.label
+        )
+        if let worker = flattenedWorkers.first(where: { $0.runId == runId && $0.agentId == agentId })?.worker {
+            guidanceText = worker.currentTask ?? guidanceText
+            if retaskText.isEmpty {
+                retaskText = worker.currentTask ?? ""
+            }
+        }
+    }
+
+    private func openConsole(for node: ResourceNode) {
+        guard let runId = node.runId, let agentId = node.agentId, !runId.isEmpty, !agentId.isEmpty else {
+            return
+        }
+        consoleTarget = WorkerConsoleTarget(
+            runId: runId,
+            agentId: agentId,
+            label: node.label,
+            subtitle: node.subtitle,
+            worktreePath: resolvedWorktreePath(runId: runId, agentId: agentId, providedPath: node.worktreePath)
+        )
+    }
+
+    private func openFiles(for node: ResourceNode) {
+        guard let agentId = node.agentId, !agentId.isEmpty else {
+            return
+        }
+        let worktreePath = resolvedWorktreePath(
+            runId: node.runId,
+            agentId: agentId,
+            providedPath: node.worktreePath
+        )
+        WorktreePanelController.shared.open(agentId: agentId, worktreePath: worktreePath)
+    }
+
+    private func resolvedWorktreePath(runId: String?, agentId: String, providedPath: String?) -> String {
+        if let providedPath,
+           !providedPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return providedPath
+        }
+        if let runId, !runId.isEmpty {
+            return "\(ProjectSettings.shared.projectRoot)/.agent/control-plane/worktrees/\(runId)/\(agentId)"
+        }
+        return ProjectSettings.shared.projectRoot
     }
 
     // Legend helpers
@@ -960,6 +1083,7 @@ private struct SwarmDotView: View {
     var worktreePath: String? = nil   // explicit path (nil = fallback inferred from run/agent)
     var agentId:      String  = ""
     var runId:        String? = nil
+    var onOpenConsole: (() -> Void)? = nil
 
     @State private var pulseScale:   CGFloat = 1.0
     @State private var pulseOpacity: Double  = 0.65
@@ -1029,32 +1153,52 @@ private struct SwarmDotView: View {
             // ── Files button — always visible below the label ──────────
             // Green when worktreePath is confirmed; grey when using fallback inference.
             if size >= 14 {
-                Button {
-                    let aid = agentId.isEmpty ? nodeId : agentId
-                    WorktreePanelController.shared.open(agentId: aid,
-                                                        worktreePath: resolvedWorktreePath)
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: max(6, size * 0.30), weight: .medium))
-                        if size >= 22 {
-                            Text("Files")
-                                .font(.system(size: max(6, size * 0.28), weight: .medium))
+                HStack(spacing: 4) {
+                    if let onOpenConsole {
+                        Button(action: onOpenConsole) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "terminal.fill")
+                                    .font(.system(size: max(6, size * 0.30), weight: .medium))
+                                if size >= 22 {
+                                    Text("CLI")
+                                        .font(.system(size: max(6, size * 0.28), weight: .medium))
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, max(4, size * 0.18))
+                            .padding(.vertical,   max(1, size * 0.08))
+                            .background(Capsule().fill(Color.accentColor.opacity(0.8)))
                         }
+                        .buttonStyle(.plain)
                     }
-                    .foregroundColor(worktreePath != nil
-                        ? Color(red: 0.0, green: 0.88, blue: 0.45)
-                        : Color(white: 0.52))
-                    .padding(.horizontal, max(4, size * 0.18))
-                    .padding(.vertical,   max(1, size * 0.08))
-                    .background(
-                        Capsule()
-                            .fill(Color(white: 0.12))
-                            .overlay(Capsule().stroke(Color(white: 0.26), lineWidth: 0.5))
-                    )
+
+                    Button {
+                        let aid = agentId.isEmpty ? nodeId : agentId
+                        WorktreePanelController.shared.open(agentId: aid,
+                                                            worktreePath: resolvedWorktreePath)
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "folder.fill")
+                                .font(.system(size: max(6, size * 0.30), weight: .medium))
+                            if size >= 22 {
+                                Text("Files")
+                                    .font(.system(size: max(6, size * 0.28), weight: .medium))
+                            }
+                        }
+                        .foregroundColor(worktreePath != nil
+                            ? Color(red: 0.0, green: 0.88, blue: 0.45)
+                            : Color(white: 0.52))
+                        .padding(.horizontal, max(4, size * 0.18))
+                        .padding(.vertical,   max(1, size * 0.08))
+                        .background(
+                            Capsule()
+                                .fill(Color(white: 0.12))
+                                .overlay(Capsule().stroke(Color(white: 0.26), lineWidth: 0.5))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open worktree for \(agentId.isEmpty ? nodeId : agentId)")
                 }
-                .buttonStyle(.plain)
-                .help("Open worktree for \(agentId.isEmpty ? nodeId : agentId)")
             }
         }
     }
@@ -1064,25 +1208,36 @@ private struct SwarmDotView: View {
 
 struct TopologyGraphView: View {
     @ObservedObject var swarmModel: AgentSwarmModel
+    let selectedNodeId: String?
+    let onSelectNode: (ResourceNode) -> Void
+    let onOpenConsole: (ResourceNode) -> Void
+    let onOpenFiles: (ResourceNode) -> Void
     @State private var animPhase: Double = 0
 
     var body: some View {
         GeometryReader { geo in
-            Canvas { ctx, size in
-                let nodes = swarmModel.computeGraphNodes(in: size)
-                let edges = swarmModel.computeGraphEdges(nodes: nodes)
-                let nodeMap = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+            let nodes = swarmModel.computeGraphNodes(in: geo.size)
+            let edges = swarmModel.computeGraphEdges(nodes: nodes)
+            let nodeMap = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
 
-                // Draw edges
-                for edge in edges {
-                    guard let from = nodeMap[edge.fromId], let to = nodeMap[edge.toId] else { continue }
-                    drawTopologyEdge(ctx: &ctx, from: from.position, to: to.position,
-                                     topic: edge.topic, isActive: edge.isActive, phase: animPhase)
+            ZStack {
+                Canvas { ctx, _ in
+                    for edge in edges {
+                        guard let from = nodeMap[edge.fromId], let to = nodeMap[edge.toId] else { continue }
+                        drawTopologyEdge(ctx: &ctx, from: from.position, to: to.position,
+                                         topic: edge.topic, isActive: edge.isActive, phase: animPhase)
+                    }
                 }
 
-                // Draw nodes on top
-                for node in nodes {
-                    drawTopologyNode(ctx: &ctx, node: node)
+                ForEach(nodes) { node in
+                    TopologyNodeView(
+                        node: node,
+                        selected: selectedNodeId == node.id,
+                        onSelect: { onSelectNode(node) },
+                        onOpenConsole: node.role.isWorkerLike ? { onOpenConsole(node) } : nil,
+                        onOpenFiles: node.agentId == nil ? nil : { onOpenFiles(node) }
+                    )
+                    .position(node.position)
                 }
             }
         }
@@ -1149,55 +1304,270 @@ struct TopologyGraphView: View {
         ctx.stroke(arrow, with: .color(edgeColor), lineWidth: arrowLineW)
     }
 
-    // MARK: - Node drawing
+}
 
-    private func drawTopologyNode(ctx: inout GraphicsContext, node: ResourceNode) {
-        let nodeSz: CGFloat
+private struct TopologyNodeView: View {
+    let node: ResourceNode
+    let selected: Bool
+    let onSelect: () -> Void
+    let onOpenConsole: (() -> Void)?
+    let onOpenFiles: (() -> Void)?
+
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var pulseOpacity: Double = 0.55
+
+    private var runtimeRing: Color {
+        if let runtime = node.runtime, !runtime.isEmpty {
+            return LLMType.detect(runtime).ringColor
+        }
+        return Color(white: 0.55)
+    }
+
+    private var personaRing: Color? {
+        if let persona = node.personaId, !persona.isEmpty {
+            return personaRingColor(for: persona)
+        }
         switch node.role {
-        case .coordinator: nodeSz = 38
-        case .manager:     nodeSz = 22
-        case .worker:      nodeSz = 14
+        case .worker(let category):
+            return personaRingColor(for: category)
+        default:
+            return nil
         }
+    }
 
-        // Load heat: idle = dark grey, running = green, done = faded
-        let baseColor: Color
+    private var size: CGFloat {
+        switch node.role {
+        case .coordinator: return 42
+        case .manager: return 28
+        case .worker: return 18
+        }
+    }
+
+    private var cardWidth: CGFloat {
+        switch node.role {
+        case .coordinator: return 156
+        case .manager: return 132
+        case .worker: return 118
+        }
+    }
+
+    private var baseColor: Color {
         switch node.status {
-        case .running: baseColor = Color(red: 0.0, green: 0.88, blue: 0.45)
-        case .done:    baseColor = Color(white: 0.38)
-        case .failed:  baseColor = Color(red: 1.0, green: 0.22, blue: 0.22)
-        default:       baseColor = Color(white: 0.22)
+        case .running: return Color(red: 0.0, green: 0.88, blue: 0.45)
+        case .done: return Color(white: 0.38)
+        case .failed: return Color(red: 1.0, green: 0.22, blue: 0.22)
+        case .queued: return Color(red: 0.94, green: 0.72, blue: 0.18)
+        case .idle: return Color(white: 0.22)
         }
-        // Heat tint: more active workers → warmer fill
-        let heatColor = node.loadFraction > 0.7
-            ? Color(red: 1.0, green: 0.60, blue: 0.15)
-            : baseColor
+    }
 
-        let rect = CGRect(x: node.position.x - nodeSz / 2, y: node.position.y - nodeSz / 2,
-                          width: nodeSz, height: nodeSz)
-        let circle = Path(ellipseIn: rect)
-        ctx.fill(circle, with: .color(heatColor.opacity(0.90)))
+    var body: some View {
+        VStack(spacing: 5) {
+            ZStack {
+                if let personaRing {
+                    Circle()
+                        .stroke(personaRing.opacity(0.85), style: StrokeStyle(lineWidth: 1.8, dash: [3, 2]))
+                        .frame(width: size + 12, height: size + 12)
+                }
 
-        // Persona ring for coordinator and manager
-        if case .coordinator = node.role {
-            let ringW: CGFloat = 3
-            let ringRect = rect.insetBy(dx: -ringW, dy: -ringW)
-            ctx.stroke(Path(ellipseIn: ringRect),
-                       with: .color(Color(red: 0.0, green: 0.88, blue: 0.45).opacity(0.55)),
-                       lineWidth: ringW)
+                Circle()
+                    .stroke(runtimeRing, lineWidth: selected ? 3.5 : 2.4)
+                    .frame(width: size + 6, height: size + 6)
+
+                Circle()
+                    .fill(baseColor.opacity(node.loadFraction > 0.7 ? 1.0 : 0.88))
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Circle()
+                            .stroke(runtimeRing.opacity(pulseOpacity), lineWidth: 2)
+                            .scaleEffect(pulseScale)
+                            .opacity(node.status == .running ? 1 : 0)
+                    )
+            }
+            .shadow(color: baseColor.opacity(node.status == .running ? 0.4 : 0.12), radius: node.status == .running ? 12 : 4)
+
+            Text(node.label)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .lineLimit(1)
+                .foregroundStyle(.primary)
+
+            if let subtitle = node.subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let detail = node.detail, !detail.isEmpty {
+                Text(detail)
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+
+            if onOpenConsole != nil || onOpenFiles != nil {
+                HStack(spacing: 6) {
+                    if let onOpenConsole {
+                        Button(action: onOpenConsole) {
+                            Image(systemName: "terminal.fill")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.8)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open live worker console")
+                    }
+                    if let onOpenFiles {
+                        Button(action: onOpenFiles) {
+                            Image(systemName: "folder.fill")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color.white.opacity(0.06)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open worktree")
+                    }
+                }
+            }
         }
-
-        // Glow for running nodes
-        if node.status == .running {
-            ctx.stroke(circle, with: .color(heatColor.opacity(0.20)), lineWidth: nodeSz * 0.4)
+        .frame(width: cardWidth)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(NSColor.windowBackgroundColor).opacity(selected ? 0.92 : 0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(selected ? runtimeRing.opacity(0.9) : Color.white.opacity(0.08), lineWidth: selected ? 1.6 : 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .onTapGesture(perform: onSelect)
+        .contextMenu {
+            if let onOpenConsole {
+                Button("Open Live Console", action: onOpenConsole)
+            }
+            if let onOpenFiles {
+                Button("Open Worktree", action: onOpenFiles)
+            }
         }
+        .onAppear {
+            guard node.status == .running else { return }
+            withAnimation(.easeOut(duration: 1.45).repeatForever(autoreverses: false)) {
+                pulseScale = 2.4
+                pulseOpacity = 0
+            }
+        }
+    }
+}
 
-        // Label
-        let labelSz: CGFloat = max(7, nodeSz * 0.38)
-        let text = Text(node.label)
-            .font(.system(size: labelSz, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white)
-        ctx.draw(text, at: CGPoint(x: node.position.x, y: node.position.y + nodeSz / 2 + labelSz + 2),
-                 anchor: .center)
+private struct WorkerConsoleTarget: Identifiable, Equatable {
+    let runId: String
+    let agentId: String
+    let label: String
+    let subtitle: String?
+    let worktreePath: String
+
+    var id: String { "\(runId)|\(agentId)" }
+}
+
+private struct WorkerConsoleSheet: View {
+    let target: WorkerConsoleTarget
+    let onSendGuidance: (String) async throws -> Void
+    let onOpenFiles: () -> Void
+
+    @State private var lines: [String] = []
+    @State private var guidance = ""
+    @State private var statusMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(target.label)
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(target.subtitle ?? "\(target.runId) · \(target.agentId)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Open Files", action: onOpenFiles)
+                    .buttonStyle(.bordered)
+            }
+
+            ScrollView {
+                Text(lines.joined(separator: ""))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.system(size: 11, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(10)
+            }
+            .frame(minHeight: 320)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.black.opacity(0.9))
+            )
+
+            CommandTextEditor(
+                text: $guidance,
+                placeholder: "Inject steering instructions into this worker…",
+                font: .systemFont(ofSize: 12)
+            )
+            .frame(minHeight: 72, maxHeight: 96)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+            )
+
+            HStack {
+                Button("Send Guidance") {
+                    Task {
+                        do {
+                            try await onSendGuidance(guidance)
+                            statusMessage = "Guidance sent"
+                            guidance = ""
+                        } catch {
+                            statusMessage = error.localizedDescription
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(guidance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+        }
+        .padding(16)
+        .frame(minWidth: 720, minHeight: 520)
+        .task(id: target.id) {
+            for await line in A2AClient.shared.subscribeWorkerStream(runId: target.runId, agentId: target.agentId) {
+                lines.append(line)
+                if lines.count > 1000 {
+                    lines.removeFirst(lines.count - 1000)
+                }
+            }
+        }
+    }
+}
+
+private extension ResourceNode.NodeRole {
+    var isWorkerLike: Bool {
+        switch self {
+        case .worker:
+            return true
+        case .coordinator, .manager:
+            return false
+        }
     }
 }
 

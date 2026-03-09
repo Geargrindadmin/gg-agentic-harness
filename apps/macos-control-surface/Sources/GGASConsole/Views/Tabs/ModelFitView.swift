@@ -48,7 +48,7 @@ struct ModelFitView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Model Fit")
                     .font(.headline.bold())
-                Text("Use local hardware fit analysis to decide which coding models belong in LM Studio and which coordinator/runtime path makes sense.")
+                Text("Use local hardware fit analysis to decide which coding models belong in LLM Studio and which coordinator/runtime path makes sense.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -163,13 +163,13 @@ struct ModelFitView: View {
             }
 
             HStack(spacing: 8) {
-                Button("Find in LM Studio") {
+                Button("Find in LLM Studio") {
                     shell.openLMStudioCatalog(query: recommendation.lmStudioQuery)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
 
-                Text("LM Studio query: \(recommendation.lmStudioQuery)")
+                Text("LLM Studio query: \(recommendation.lmStudioQuery)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

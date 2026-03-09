@@ -1,5 +1,6 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export interface FreeModelEntry {
   id: string;
@@ -25,8 +26,16 @@ export interface FreeModelsCatalogSnapshot {
 }
 
 async function loadSources(projectRoot: string): Promise<Record<string, { name: string; url: string; models: Array<[string, string, string, string, string]> }>> {
-  const vendorFile = path.join(projectRoot, 'third-party', 'free-coding-models', 'sources.js');
-  const module = await import(pathToFileURL(vendorFile).href);
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+  const candidates = [
+    path.join(projectRoot, 'third-party', 'free-coding-models', 'sources.js'),
+    path.join(packageRoot, 'third-party', 'free-coding-models', 'sources.js')
+  ];
+  const resolvedFile = candidates.find((entry) => fs.existsSync(entry));
+  if (!resolvedFile) {
+    throw new Error('free-coding-models catalog is not available');
+  }
+  const module = await import(pathToFileURL(resolvedFile).href);
   return module.sources as Record<string, { name: string; url: string; models: Array<[string, string, string, string, string]> }>;
 }
 

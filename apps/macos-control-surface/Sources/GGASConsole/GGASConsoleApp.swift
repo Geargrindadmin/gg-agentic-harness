@@ -11,6 +11,7 @@ struct GGASConsoleApp: App {
     @StateObject private var launcher = LaunchManager()
     @StateObject private var shell    = AppShellState()
     @StateObject private var workflow = WorkflowContextStore.shared
+    @StateObject private var uiControlPlane = UIActionBusControlPlane()
 
     /// The imported app defaults to viewer/control-surface mode.
     /// Legacy setup flows are still available from the menu while backend migration continues.
@@ -42,10 +43,15 @@ struct GGASConsoleApp: App {
                 .environmentObject(launcher)
                 .environmentObject(shell)
                 .environmentObject(workflow)
+                .environmentObject(uiControlPlane)
                 .task { await launcher.start() }
                 .task { AgentMonitorService.shared.startPolling() }  // single-source bus polling (Phase 2)
                 .task {
                     await activateMainWindow()
+                }
+                .task {
+                    uiControlPlane.bind(shell: shell, workflow: workflow)
+                    uiControlPlane.start()
                 }
                 .sheet(isPresented: $showSetup) {
                     SetupWizardView(showWizard: $showSetup)

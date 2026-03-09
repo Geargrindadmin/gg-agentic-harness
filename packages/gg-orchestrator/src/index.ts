@@ -339,6 +339,79 @@ function loadPersonaRegistry(projectRoot: string): PersonaRegistryEntry[] {
   return registry.personas || [];
 }
 
+const BUILTIN_PERSONA_FALLBACKS: Record<string, PersonaPacket> = {
+  orchestrator: {
+    personaId: 'orchestrator',
+    role: 'coordinator',
+    riskTier: 'medium',
+    dispatchMode: 'multi-agent',
+    memoryQuery: 'run coordination delegation worktree worker status',
+    domains: ['orchestration', 'coordination'],
+    allowed: ['coordinate workers', 'route tasks', 'monitor progress', 'request verification evidence'],
+    blocked: ['directly mutate external production systems', 'change assigned persona'],
+    requiresBoardFor: ['auth', 'payments', 'secrets', 'infra'],
+    defaultPartners: ['project-planner', 'backend-specialist'],
+    promptPath: '',
+    promptBody: ''
+  },
+  'project-planner': {
+    personaId: 'project-planner',
+    role: 'planner',
+    riskTier: 'medium',
+    dispatchMode: 'structured',
+    memoryQuery: 'task planning sequencing acceptance criteria',
+    domains: ['planning', 'delivery'],
+    allowed: ['write plans', 'clarify scope', 'define acceptance criteria'],
+    blocked: ['deploy code', 'change assigned persona'],
+    requiresBoardFor: ['auth', 'payments', 'infra'],
+    defaultPartners: ['orchestrator', 'backend-specialist'],
+    promptPath: '',
+    promptBody: ''
+  },
+  'test-engineer': {
+    personaId: 'test-engineer',
+    role: 'reviewer',
+    riskTier: 'low',
+    dispatchMode: 'verification',
+    memoryQuery: 'tests verification regressions qa',
+    domains: ['testing', 'verification'],
+    allowed: ['write tests', 'review regressions', 'report failures'],
+    blocked: ['change assigned persona'],
+    requiresBoardFor: [],
+    defaultPartners: ['project-planner', 'backend-specialist'],
+    promptPath: '',
+    promptBody: ''
+  },
+  'explorer-agent': {
+    personaId: 'explorer-agent',
+    role: 'scout',
+    riskTier: 'low',
+    dispatchMode: 'discovery',
+    memoryQuery: 'repository structure changed files recent context',
+    domains: ['discovery', 'research'],
+    allowed: ['inspect files', 'summarize findings', 'gather evidence'],
+    blocked: ['change assigned persona'],
+    requiresBoardFor: [],
+    defaultPartners: ['orchestrator', 'project-planner'],
+    promptPath: '',
+    promptBody: ''
+  },
+  'backend-specialist': {
+    personaId: 'backend-specialist',
+    role: 'builder',
+    riskTier: 'medium',
+    dispatchMode: 'implementation',
+    memoryQuery: 'backend services api implementation',
+    domains: ['implementation', 'backend'],
+    allowed: ['implement scoped changes', 'run local verification', 'prepare handoff summaries'],
+    blocked: ['change assigned persona', 'spawn child agents directly'],
+    requiresBoardFor: ['auth', 'payments', 'infra'],
+    defaultPartners: ['project-planner', 'test-engineer'],
+    promptPath: '',
+    promptBody: ''
+  }
+};
+
 function detectHighRiskTerms(taskSummary: string, persona: PersonaPacket): string[] {
   const lower = taskSummary.toLowerCase();
   const matches = new Set<string>();
@@ -512,7 +585,11 @@ export function buildPersonaPacket(projectRoot: string, personaId: string): Pers
   const registry = loadPersonaRegistry(projectRoot);
   const persona = registry.find((entry) => entry.id === personaId);
   if (!persona) {
-    throw new Error(`Persona not found: ${personaId}`);
+    const fallback = BUILTIN_PERSONA_FALLBACKS[personaId];
+    if (!fallback) {
+      throw new Error(`Persona not found: ${personaId}`);
+    }
+    return { ...fallback };
   }
 
   const promptPath = path.join(projectRoot, persona.file || '');

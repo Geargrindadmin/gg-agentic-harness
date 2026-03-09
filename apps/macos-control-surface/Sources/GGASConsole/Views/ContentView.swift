@@ -12,7 +12,7 @@ enum ConsoleTab: String, CaseIterable, Identifiable {
     case agentTaskBar  = "Agents"
     case agentAnalytics = "Agent Analytics"
     case terminal      = "Terminal"
-    case control       = "Console"
+    case llmStudio     = "LLM Studio"
     case dispatch      = "Dispatch"
     case packages      = "Packages"
     case skills        = "Skill Analytics"
@@ -34,7 +34,7 @@ enum ConsoleTab: String, CaseIterable, Identifiable {
         case .agentTaskBar: return "list.bullet.rectangle.fill"
         case .agentAnalytics: return "chart.line.uptrend.xyaxis"
         case .terminal:     return "terminal.fill"
-        case .control:      return "cpu.fill"
+        case .llmStudio:    return "square.and.arrow.down.on.square"
         case .dispatch:     return "paperplane.fill"
         case .packages:     return "shippingbox.fill"
         case .skills:       return "chart.bar.fill"
@@ -54,23 +54,26 @@ struct ContentView: View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 SidebarView(selection: $shell.selectedTab, showUsage: $shell.showUsage)
+                    .navigationSplitViewColumnWidth(
+                        min: shell.sidebarCollapsed ? 52 : 220,
+                        ideal: shell.sidebarCollapsed ? 52 : 236,
+                        max: shell.sidebarCollapsed ? 60 : 250
+                    )
             } detail: {
-                detailView(for: shell.selectedTab)
+                IDEWorkspaceView {
+                    detailView(for: shell.selectedTab)
+                }
             }
             .navigationSplitViewStyle(.balanced)
-            .frame(minWidth: 1100, minHeight: 678)
+            .frame(minWidth: 1220, minHeight: 678)
             .sheet(isPresented: $shell.showUsage) {
                 UsageView()
                     .frame(minWidth: 720, minHeight: 560)
             }
-            .sheet(isPresented: $shell.showLMStudioManager) {
-                LMStudioManagerView(initialSearchQuery: shell.lmStudioCatalogQuery)
-                    .frame(minWidth: 860, minHeight: 560)
-            }
 
             StatusBarView()
         }
-        .frame(minWidth: 1100, minHeight: 700)
+        .frame(minWidth: 1220, minHeight: 700)
     }
 
     @ViewBuilder
@@ -85,7 +88,7 @@ struct ContentView: View {
         case .agentTaskBar: AgentTaskBarView()
         case .agentAnalytics: AgentAnalyticsView()
         case .terminal:     TerminalTabView()
-        case .control:      ControlPanelView()
+        case .llmStudio:   LLMStudioTabView()
         case .dispatch:     DispatchView()
         case .packages:     PackagesTabView()
         case .skills:       SkillAnalyticsView()
@@ -103,6 +106,7 @@ struct SidebarView: View {
     @Binding var selection: ConsoleTab
     @Binding var showUsage: Bool
     @EnvironmentObject var forge: ForgeStore
+    @EnvironmentObject private var shell: AppShellState
     @ObservedObject private var monitor = AgentMonitorService.shared
 
     private let primaryTabs: [ConsoleTab] = [
@@ -115,7 +119,7 @@ struct SidebarView: View {
         .agentTaskBar,
         .agentAnalytics,
         .terminal,
-        .control,
+        .llmStudio,
         .dispatch,
         .packages,
         .skills
@@ -131,69 +135,56 @@ struct SidebarView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 2) {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(alignment: .center, spacing: 6) {
-                        Text("GearGrind")
-                            .font(.headline.bold())
-                        Spacer()
-                        Button {
-                            showUsage = true
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Usage and harness capacity")
-                        if monitor.isConnected {
-                            LiveBadge()
-                        } else {
-                            Label("Offline", systemImage: "circle.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .help("Harness control-plane unreachable")
-                        }
-                    }
-                    Text("Agentic System")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+                header
+                    .padding(.horizontal, shell.sidebarCollapsed ? 7 : 16)
+                    .padding(.top, shell.sidebarCollapsed ? 12 : 16)
+                    .padding(.bottom, 8)
 
-                sectionHeader("Operate")
+                if !shell.sidebarCollapsed {
+                    sectionHeader("Operate")
+                }
                 ForEach(primaryTabs) { tab in
                     SidebarButton(
                         tab: tab,
                         isSelected: selection == tab,
                         badge: badgeCount(for: tab)
                     ) {
-                        selection = tab
+                        selectTab(tab)
                     }
                 }
 
-                sectionHeader("Diagnostics")
+                if !shell.sidebarCollapsed {
+                    sectionHeader("Diagnostics")
+                }
                 ForEach(diagnosticTabs) { tab in
                     SidebarButton(
                         tab: tab,
                         isSelected: selection == tab,
                         badge: badgeCount(for: tab)
                     ) {
-                        selection = tab
+                        selectTab(tab)
                     }
                 }
 
-                Divider()
-                    .padding(.horizontal, 12)
-                    .padding(.top, 10)
+                if !shell.sidebarCollapsed {
+                    Divider()
+                        .padding(.horizontal, 12)
+                        .padding(.top, 10)
 
-                AgentHealthStrip()
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 10)
+                    AgentHealthStrip()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 220, idealWidth: 236, maxWidth: 250, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            minWidth: shell.sidebarCollapsed ? 52 : 220,
+            idealWidth: shell.sidebarCollapsed ? 52 : 236,
+            maxWidth: shell.sidebarCollapsed ? 60 : 250,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
         .background(Color(NSColor.windowBackgroundColor))
     }
 
@@ -213,6 +204,112 @@ struct SidebarView: View {
             .padding(.top, 10)
             .padding(.bottom, 2)
     }
+
+    @ViewBuilder
+    private var header: some View {
+        if shell.sidebarCollapsed {
+            VStack(spacing: 10) {
+                Button {
+                    shell.toggleSidebarCollapsed()
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.white.opacity(0.05))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Expand sidebar")
+
+                Button {
+                    showUsage = true
+                } label: {
+                    Image(systemName: "gauge.with.dots.needle.67percent")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.white.opacity(0.05))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Open usage, cooldown windows, and harness capacity")
+
+                statusDot
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .center, spacing: 6) {
+                    Text("GearGrind")
+                        .font(.headline.bold())
+                    Spacer()
+                    Button {
+                        shell.toggleSidebarCollapsed()
+                    } label: {
+                        Image(systemName: "sidebar.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .padding(8)
+                            .background(Circle().fill(Color.secondary.opacity(0.10)))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Collapse sidebar")
+
+                    Button {
+                        showUsage = true
+                    } label: {
+                        Label("Usage", systemImage: "gauge.with.dots.needle.67percent")
+                            .font(.system(size: 11, weight: .semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.12))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Open provider usage, cooldown windows, and harness capacity")
+
+                    statusDot
+                }
+
+                Text("Agentic System")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusDot: some View {
+        if shell.sidebarCollapsed {
+            Circle()
+                .fill(monitor.isConnected ? Color.green : Color.red)
+                .frame(width: 8, height: 8)
+                .frame(width: 38, height: 18)
+                .help(monitor.isConnected ? "Connected to harness event stream" : "Harness control-plane unreachable")
+        } else if monitor.isConnected {
+            LiveBadge()
+        } else {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.red)
+                .frame(width: 38, height: 18)
+                .help("Harness control-plane unreachable")
+        }
+    }
+
+    private func selectTab(_ tab: ConsoleTab) {
+        selection = tab
+        shell.sidebarCollapsed = true
+        shell.rightInspectorCollapsed = true
+    }
 }
 
 // MARK: - Agent health indicator
@@ -220,11 +317,18 @@ struct SidebarView: View {
 struct AgentHealthStrip: View {
     @State private var status: AgentStatus? = nil
     @State private var offline = false
+    @State private var loading = true
     @State private var polling: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
+            Text("Runtime Health")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .padding(.horizontal, 4)
             if offline {
                 Label("Server offline", systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2).foregroundStyle(.orange)
@@ -244,7 +348,9 @@ struct AgentHealthStrip: View {
                 }
                 .padding(.horizontal, 4)
             } else {
-                ProgressView().scaleEffect(0.5).frame(maxWidth: .infinity, alignment: .leading)
+                Text(loading ? "Checking harness runtime status…" : "Runtime health unavailable")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
         }
@@ -275,11 +381,11 @@ struct AgentHealthStrip: View {
             while !Task.isCancelled {
                 do {
                     let s = try await A2AClient.shared.fetchStatus()
-                    await MainActor.run { status = s; offline = false }
+                    await MainActor.run { status = s; offline = false; loading = false }
                 } catch {
                     // Fallback: /api/status might not be deployed yet — check /health instead
                     let isUp = await A2AClient.shared.ping()
-                    await MainActor.run { offline = !isUp }
+                    await MainActor.run { offline = !isUp; loading = false }
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
@@ -288,40 +394,59 @@ struct AgentHealthStrip: View {
 }
 
 struct SidebarButton: View {
+    @EnvironmentObject private var shell: AppShellState
     let tab: ConsoleTab
     let isSelected: Bool
     let badge: Int
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
+        if shell.sidebarCollapsed {
+            Button(action: action) {
                 Image(systemName: tab.icon)
-                    .frame(width: 16)
-                    .foregroundStyle(isSelected ? .white : .primary)
-
-                Text(tab.rawValue)
-                    .font(.body)
-                    .foregroundStyle(isSelected ? .white : .primary)
-
-                Spacer()
-
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(isSelected ? Color.white.opacity(0.3) : Color.accentColor)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isSelected ? Color.white.opacity(0.10) : Color.clear)
+                    )
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(isSelected ? Color.accentColor : Color.clear)
-            .cornerRadius(8)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 7)
+            .help(tab.rawValue)
+        } else {
+            Button(action: action) {
+                HStack(spacing: 10) {
+                    Image(systemName: tab.icon)
+                        .frame(width: 16)
+                        .foregroundStyle(isSelected ? .white : .primary)
+
+                    Text(tab.rawValue)
+                        .font(.body)
+                        .foregroundStyle(isSelected ? .white : .primary)
+
+                    Spacer()
+
+                    if badge > 0 {
+                        Text("\(badge)")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(isSelected ? Color.white.opacity(0.3) : Color.accentColor)
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(isSelected ? Color.accentColor : Color.clear)
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .help(tab.rawValue)
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 8)
     }
 }
 

@@ -218,6 +218,143 @@ function controlPlaneMeta(): ControlPlaneMetadata {
   };
 }
 
+interface RuntimeDiscoverySnapshot {
+  runtime: string;
+  label?: string;
+  binaryPath: string | null;
+  authenticated: boolean;
+  localCliAuth: boolean;
+  directApiAvailable: boolean;
+  preferredTransport: string | null;
+  summary: string;
+  sources: Array<{
+    id: string;
+    type: 'file' | 'env';
+    location: string;
+    status: 'present' | 'missing';
+    detail: string;
+  }>;
+}
+
+function readJsonFile<T>(filePath: string): T | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
+  } catch {
+    return null;
+  }
+}
+
+function fileSource(id: string, filePath: string, present: boolean, detail: string): RuntimeDiscoverySnapshot['sources'][number] {
+  return {
+    id,
+    type: 'file',
+    location: filePath,
+    status: present ? 'present' : 'missing',
+    detail
+  };
+}
+
+function buildAntigravityProviderDiscoveries(): RuntimeDiscoverySnapshot[] {
+  const antigravityProxyPath = path.join(process.env.HOME || PROJECT_ROOT, '.config', 'antigravity-proxy', 'accounts.json');
+  const antigravityOpenCodePath = path.join(process.env.HOME || PROJECT_ROOT, '.config', 'opencode', 'antigravity-accounts.json');
+  const geminiAccountsPath = path.join(process.env.HOME || PROJECT_ROOT, '.gemini', 'google_accounts.json');
+
+  const antigravityProxy = readJsonFile<{
+    accounts?: Array<{ enabled?: boolean; isInvalid?: boolean; modelRateLimits?: Record<string, unknown> }>;
+  }>(antigravityProxyPath);
+  const antigravityOpenCode = readJsonFile<{
+    activeIndexByFamily?: Record<string, number>;
+    accounts?: Array<{ enabled?: boolean; rateLimitResetTimes?: Record<string, unknown> }>;
+  }>(antigravityOpenCodePath);
+  const geminiAccounts = readJsonFile<{ active?: unknown; old?: unknown[] }>(geminiAccountsPath);
+
+  const modelHints = new Set<string>();
+  for (const account of antigravityProxy?.accounts || []) {
+    if (account.enabled === false || account.isInvalid) {
+      continue;
+    }
+    for (const key of Object.keys(account.modelRateLimits || {})) {
+      modelHints.add(key.toLowerCase());
+    }
+  }
+  for (const account of antigravityOpenCode?.accounts || []) {
+    if (account.enabled === false) {
+      continue;
+    }
+    for (const key of Object.keys(account.rateLimitResetTimes || {})) {
+      modelHints.add(key.toLowerCase());
+    }
+  }
+
+  const families = antigravityOpenCode?.activeIndexByFamily || {};
+  const sources = [
+    fileSource('antigravity_proxy', antigravityProxyPath, Boolean(antigravityProxy), 'Antigravity account registry'),
+    fileSource('antigravity_opencode', antigravityOpenCodePath, Boolean(antigravityOpenCode), 'OpenCode Antigravity family map'),
+    fileSource('gemini_accounts', geminiAccountsPath, Boolean(geminiAccounts), 'Google/Gemini local account registry')
+  ];
+
+  const hasClaude = typeof families.claude === 'number' || Array.from(modelHints).some((entry) => entry.includes('claude'));
+  const hasGemini =
+    typeof families.gemini === 'number'
+    || Array.from(modelHints).some((entry) => entry.includes('gemini'))
+    || geminiAccounts?.active != null
+    || Boolean(geminiAccounts?.old?.length);
+  const hasGptFamily =
+    typeof families.openai === 'number'
+    || typeof families.gpt === 'number'
+    || Array.from(modelHints).some((entry) => entry.includes('gpt') || entry.includes('openai') || entry.includes('gpt-oss'));
+
+  const discoveries: RuntimeDiscoverySnapshot[] = [];
+
+  if (hasClaude) {
+    discoveries.push({
+      runtime: 'claude-antigravity',
+      label: 'Claude via Antigravity',
+      binaryPath: null,
+      authenticated: true,
+      localCliAuth: true,
+      directApiAvailable: false,
+      preferredTransport: null,
+      summary: 'Inherited Claude OAuth/session is available from Antigravity account state',
+      sources
+    });
+  }
+
+  if (hasGemini) {
+    discoveries.push({
+      runtime: 'gemini-antigravity',
+      label: 'Gemini via Antigravity',
+      binaryPath: null,
+      authenticated: true,
+      localCliAuth: true,
+      directApiAvailable: false,
+      preferredTransport: null,
+      summary: 'Inherited Gemini OAuth/session is available from Antigravity and local Gemini account state',
+      sources
+    });
+  }
+
+  if (hasGptFamily) {
+    discoveries.push({
+      runtime: 'gpt-antigravity',
+      label: 'GPT-family via Antigravity',
+      binaryPath: null,
+      authenticated: true,
+      localCliAuth: true,
+      directApiAvailable: false,
+      preferredTransport: null,
+      summary: 'Antigravity indicates a GPT/OpenAI-family route is configured locally',
+      sources
+    });
+  }
+
+  return discoveries;
+}
+
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1807,6 +1944,19 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         controlPlane: controlPlaneMeta(),
         governor: snapshot,
         uptime: process.uptime()
+      });
+      return;
+    }
+
+    if (pathname === '/api/runtime-discovery' && method === 'GET') {
+      const runtimeDiscoveries = ['codex', 'claude', 'kimi'].map((runtime) =>
+        discoverRuntimeCredentials(PROJECT_ROOT, runtime as 'codex' | 'claude' | 'kimi')
+      );
+      const discoveries = [...runtimeDiscoveries, ...buildAntigravityProviderDiscoveries()];
+      const selection = selectCoordinatorRuntime(PROJECT_ROOT, null);
+      json(res, 200, {
+        coordinatorSelection: selection,
+        discoveries
       });
       return;
     }
