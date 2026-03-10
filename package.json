@@ -17,7 +17,7 @@
     "macos:control-surface:build": "cd apps/macos-control-surface && swift build",
     "macos:control-surface:run": "cd apps/macos-control-surface && swift run GGHarnessControlSurface",
     "gg:doctor": "node packages/gg-cli/dist/index.js doctor",
-    "type-check": "npm run lint --workspace=@geargrind/gg-core --workspace=@geargrind/gg-runtime-adapters --workspace=@geargrind/gg-orchestrator --workspace=@geargrind/gg-control-plane-server --workspace=@geargrind/gg-cli",
+    "type-check": "npm run gg:build && npm run lint --workspace=@geargrind/gg-core --workspace=@geargrind/gg-runtime-adapters --workspace=@geargrind/gg-orchestrator --workspace=@geargrind/gg-control-plane-server --workspace=@geargrind/gg-cli",
     "lint": "npm run type-check && node scripts/harness-lint.mjs",
     "test": "npm run test --workspace=@geargrind/gg-core --workspace=@geargrind/gg-runtime-adapters --workspace=@geargrind/gg-orchestrator --workspace=@geargrind/gg-control-plane-server --workspace=@geargrind/gg-cli --if-present",
     "harness:lint": "node scripts/harness-lint.mjs",
