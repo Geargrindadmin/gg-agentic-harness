@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://geargrind.dev/schemas/canonical-product-spec.schema.json",
+  "title": "Canonical Product Spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sourceType",
+    "summary",
+    "lane",
+    "laneConfidence",
+    "targetStack",
+    "enterprisePacks",
+    "acceptanceCriteria",
+    "validationProfile",
+    "deliveryTarget"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "prompt",
+        "prd",
+        "prompt+constraints",
+        "normalized"
+      ]
+    },
+    "sourcePath": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lane": {
+      "type": "string",
+      "enum": [
+        "marketing-site",
+        "saas-dashboard",
+        "admin-panel",
+        "crud-shell",
+        "content-portal"
+      ]
+    },
+    "laneConfidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "targetStack": {
+      "type": "string",
+      "enum": [
+        "nextjs-app-router",
+        "vite-react",
+        "vite-react-node",
+        "mdx-docs-site"
+      ]
+    },
+    "riskTier": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium"
+    },
+    "enterprisePacks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "design-system",
+          "observability",
+          "auth-rbac",
+          "billing-stripe",
+          "compliance-baseline",
+          "notifications",
+          "cms-content",
+          "admin-ops"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requiredIntegrations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "validationProfile": {
+      "type": "string",
+      "enum": [
+        "marketing-site",
+        "saas-dashboard",
+        "admin-panel",
+        "crud-shell",
+        "content-portal"
+      ]
+    },
+    "deliveryTarget": {
+      "type": "string",
+      "enum": [
+        "local-repo",
+        "portable-target",
+        "downstream-install"
+      ]
+    },
+    "downstreamTarget": {
+      "type": "string"
+    },
+    "requiresHumanReview": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

@@ -232,3 +232,9 @@ export function readJsonFile<T = unknown>(filePath: string): T | null {
     return null;
   }
 }
+
+export * from './harness-settings.js';
+export * from './benchmark.js';
+export * from './preflight.js';
+export * from './product-builder.js';
+export * from './product-spec.js';

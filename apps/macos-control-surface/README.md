@@ -25,6 +25,18 @@ npm run macos:control-surface:bundle
 open apps/macos-control-surface/.dist/GGHarnessControlSurface.app
 ```
 
+To replace an already installed app copy in `~/Applications` or `/Applications`:
+
+```bash
+npm run macos:control-surface:install
+```
+
+To replace the installed copy and launch it immediately:
+
+```bash
+npm run macos:control-surface:run-installed
+```
+
 Or open in Xcode:
 ```bash
 open Package.swift
@@ -39,6 +51,7 @@ The app is designed around a planner-first workflow:
 - `Replays` renders local Claude Code and Cursor transcript sessions into readable replay pages.
 - `Model Fit` uses local `llmfit` analysis to recommend which coding models fit the current machine and can hand off into the LM Studio browser.
 - `Free Models` exposes the vendored free-provider catalog and can hand off model searches into LM Studio.
+- `Harness` shows a live control-plane badge, the dynamic architecture diagram, and headless-backed settings that save to `.agent/control-plane/server/harness-settings.json`.
 - the headless harness remains the source of truth; the mac app is an operator surface, not a separate control plane.
 
 ## Package as .dmg (distribute to teammates)

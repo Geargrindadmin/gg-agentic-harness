@@ -65,6 +65,7 @@ struct PackagesTabView: View {
             // Refresh installed status for all recommended tools
             rtm.refreshStatus()
         }
+        .navigationTitle("Packages")
     }
 
     // MARK: - Install bar

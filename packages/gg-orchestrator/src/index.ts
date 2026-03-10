@@ -1,5 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type {
+  HarnessContextSource,
+  HarnessDocSyncMode,
+  HarnessHydraMode,
+  HarnessPromptImproverMode,
+  HarnessValidateMode
+} from '../../gg-core/dist/index.js';
 import {
   defaultAdapterMode,
   defaultLaunchTransport,
@@ -94,6 +101,17 @@ export interface RuntimeScorecard {
   status: 'available';
 }
 
+export interface HarnessExecutionPolicy {
+  loopBudget: number;
+  retryLimit: number;
+  retryBackoffSeconds: number[];
+  promptImproverMode: HarnessPromptImproverMode;
+  contextSource: HarnessContextSource;
+  hydraMode: HarnessHydraMode;
+  validateMode: HarnessValidateMode;
+  docSyncMode: HarnessDocSyncMode;
+}
+
 export interface WorkerRecord {
   agentId: string;
   runtime: RuntimeId;
@@ -104,6 +122,7 @@ export interface WorkerRecord {
   persona: PersonaPacket;
   toolBundle: string[];
   worktree: string;
+  harnessPolicy: HarnessExecutionPolicy | null;
   adapterMode: AdapterMode;
   launchTransport: LaunchTransport;
   launchSpec: Record<string, unknown>;
@@ -194,6 +213,7 @@ export interface SpawnWorkerInput {
   toolBundle?: string[];
   worktree?: string;
   launchTransport?: LaunchTransport;
+  harnessPolicy?: HarnessExecutionPolicy | null;
 }
 
 export interface DelegateTaskInput {
@@ -209,6 +229,7 @@ export interface DelegateTaskInput {
   toolBundle?: string[];
   worktree?: string;
   launchTransport?: LaunchTransport;
+  harnessPolicy?: HarnessExecutionPolicy | null;
 }
 
 export interface PostMessageInput {
@@ -440,6 +461,8 @@ function trimPromptBody(raw: string): string {
 }
 
 function renderHarnessPersonaContract(packet: PersonaPacket, worker: SpawnWorkerInput): string {
+  const policy = worker.harnessPolicy;
+  const retryBudget = policy ? `${policy.retryLimit} attempts (${policy.retryBackoffSeconds.join('s, ')}s)` : '';
   const lines = [
     'You are operating inside the GG Agentic Harness.',
     `Persona ID: ${packet.personaId}`,
@@ -463,6 +486,16 @@ function renderHarnessPersonaContract(packet: PersonaPacket, worker: SpawnWorker
     '- When you need another specialist, emit: @@GG_MSG {"type":"DELEGATE_REQUEST","body":"<why>","payload":{"requestedRuntime":"kimi|claude|codex","requestedRole":"builder|reviewer|planner","personaId":"<persona-id>","taskSummary":"<task>"}}',
     '- When your scoped task is complete, emit: @@GG_STATE {"status":"handoff_ready","summary":"<summary>"}',
     '- If you must stop because you are blocked, emit: @@GG_STATE {"status":"blocked","reason":"<reason>"}',
+    '',
+    'Active harness execution policy:',
+    policy ? `- Loop budget: ${policy.loopBudget}` : '- Loop budget: repo default',
+    policy ? `- Retry budget: ${retryBudget}` : '- Retry budget: repo default',
+    policy ? `- Prompt improver mode: ${policy.promptImproverMode}` : '- Prompt improver mode: repo default',
+    policy ? `- Context source: ${policy.contextSource}` : '- Context source: repo default',
+    policy ? `- Hydra mode: ${policy.hydraMode}` : '- Hydra mode: repo default',
+    policy ? `- Validate mode: ${policy.validateMode}` : '- Validate mode: repo default',
+    policy ? `- Doc sync mode: ${policy.docSyncMode}` : '- Doc sync mode: repo default',
+    '- Treat the loop budget and retry budget as hard harness limits for this run.',
     `Assigned task role: ${worker.role}`,
     `Assigned task summary: ${worker.taskSummary}`
   ];
@@ -520,6 +553,7 @@ function renderGenericLaunchSpec(projectRoot: string, worker: SpawnWorkerInput):
     prompt: renderHarnessPersonaContract(worker.persona, worker),
     taskSummary: worker.taskSummary,
     toolBundle: worker.toolBundle || [],
+    harnessPolicy: worker.harnessPolicy || null,
     notes: [
       'Background-terminal workers inherit the existing local CLI authentication for the current user.',
       'Live workers must emit @@GG_MSG / @@GG_STATE markers for structured harness communication.'
@@ -542,7 +576,8 @@ function createWorkerRecord(projectRoot: string, input: SpawnWorkerInput, agentI
     parentAgentId: input.parentAgentId || null,
     toolBundle: input.toolBundle || [],
     worktree: input.worktree || projectRoot,
-    launchTransport: input.launchTransport || defaultLaunchTransport(projectRoot, input.runtime)
+    launchTransport: input.launchTransport || defaultLaunchTransport(projectRoot, input.runtime),
+    harnessPolicy: input.harnessPolicy || null
   };
 
   return {
@@ -555,6 +590,7 @@ function createWorkerRecord(projectRoot: string, input: SpawnWorkerInput, agentI
     persona: input.persona,
     toolBundle: [...(input.toolBundle || [])],
     worktree: input.worktree || projectRoot,
+    harnessPolicy: input.harnessPolicy || null,
     adapterMode: resolveLaunchAdapterMode(
       projectRoot,
       input.runtime,

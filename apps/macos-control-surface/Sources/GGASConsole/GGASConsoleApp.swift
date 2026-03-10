@@ -12,6 +12,7 @@ struct GGASConsoleApp: App {
     @StateObject private var shell    = AppShellState()
     @StateObject private var workflow = WorkflowContextStore.shared
     @StateObject private var uiControlPlane = UIActionBusControlPlane()
+    @StateObject private var uiRPCService = UIActionBusRPCService()
 
     /// The imported app defaults to viewer/control-surface mode.
     /// Legacy setup flows are still available from the menu while backend migration continues.
@@ -44,6 +45,7 @@ struct GGASConsoleApp: App {
                 .environmentObject(shell)
                 .environmentObject(workflow)
                 .environmentObject(uiControlPlane)
+                .environmentObject(uiRPCService)
                 .task { await launcher.start() }
                 .task { AgentMonitorService.shared.startPolling() }  // single-source bus polling (Phase 2)
                 .task {
@@ -53,6 +55,10 @@ struct GGASConsoleApp: App {
                     uiControlPlane.bind(shell: shell, workflow: workflow)
                     uiControlPlane.start()
                 }
+                .task {
+                    uiRPCService.bind(shell: shell, workflow: workflow)
+                    uiRPCService.start()
+                }
                 .sheet(isPresented: $showSetup) {
                     SetupWizardView(showWizard: $showSetup)
                 }
@@ -61,6 +67,103 @@ struct GGASConsoleApp: App {
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandMenu("IDE") {
+                Button("Save File") {
+                    Task {
+                        try? await UIActionBus.performAsync(
+                            .saveActiveDocument,
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(shell.activeDocument == nil)
+
+                Button("Revert File") {
+                    Task {
+                        try? await UIActionBus.performAsync(
+                            .revertActiveDocument,
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+                .disabled(shell.activeDocument == nil)
+
+                Button("Close File") {
+                    UIActionBus.perform(
+                        .closeActiveDocument,
+                        shell: shell,
+                        workflow: workflow
+                    )
+                }
+                .keyboardShortcut("w", modifiers: .command)
+                .disabled(shell.activeDocument == nil)
+
+                Divider()
+
+                Button(shell.ideTerminalDockVisible ? "Hide Terminal Dock" : "Show Terminal Dock") {
+                    shell.toggleIDETerminalDock()
+                }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
+
+                Menu("New Terminal Session") {
+                    Button("zsh") {
+                        UIActionBus.perform(
+                            .launchTerminal(
+                                preset: .zsh,
+                                workingDirectory: nil,
+                                title: nil,
+                                destination: .workspaceDock
+                            ),
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+
+                    Button("bash") {
+                        UIActionBus.perform(
+                            .launchTerminal(
+                                preset: .bash,
+                                workingDirectory: nil,
+                                title: nil,
+                                destination: .workspaceDock
+                            ),
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+
+                    Button("tmux") {
+                        UIActionBus.perform(
+                            .launchTerminal(
+                                preset: .tmux,
+                                workingDirectory: nil,
+                                title: nil,
+                                destination: .workspaceDock
+                            ),
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+
+                    Button("Agent Session") {
+                        UIActionBus.perform(
+                            .launchTerminal(
+                                preset: .agent,
+                                workingDirectory: nil,
+                                title: nil,
+                                destination: .workspaceDock
+                            ),
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+                }
+            }
             CommandMenu("Harness") {
                 Button("Refresh") { forge.refresh() }
                     .keyboardShortcut("r", modifiers: .command)

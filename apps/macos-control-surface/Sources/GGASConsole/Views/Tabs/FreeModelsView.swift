@@ -77,7 +77,7 @@ struct FreeModelsView: View {
                     self.pendingLaunchDecision = nil
                 }
                 Button("Open Model Fit") {
-                    shell.selectedTab = .modelFit
+                    shell.selectTab(.modelFit)
                     self.pendingLaunchDecision = nil
                 }
             }

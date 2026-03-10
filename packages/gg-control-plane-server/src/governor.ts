@@ -1,4 +1,5 @@
 import os from 'node:os';
+import type { HarnessGovernorSettings } from '../../gg-core/dist/index.js';
 
 export interface GovernorSnapshot {
   timestamp: string;
@@ -8,6 +9,8 @@ export interface GovernorSnapshot {
   reservedRamGb: number;
   modelVramGb: number;
   perAgentOverheadGb: number;
+  cpuHighPct: number;
+  cpuLowPct: number;
   cpuPressure: number;
   cpuPaused: boolean;
   allowedAgents: number;
@@ -49,12 +52,13 @@ export class HarnessResourceGovernor {
   private cpuPaused = false;
   private previousCpuTimes: CpuTimes[] = [];
 
-  constructor() {
-    this.cpuHighPct = envNumber('HARNESS_CPU_HIGH_PCT', 85);
-    this.cpuLowPct = envNumber('HARNESS_CPU_LOW_PCT', 70);
-    this.modelVramGb = envNumber('HARNESS_MODEL_VRAM_GB', 0);
-    this.perAgentOverheadGb = envNumber('HARNESS_PER_AGENT_OVERHEAD_GB', 0.5);
-    this.reservedRamGbOverride = process.env.HARNESS_RESERVED_RAM_GB ? envNumber('HARNESS_RESERVED_RAM_GB', 0) : null;
+  constructor(overrides?: HarnessGovernorSettings) {
+    this.cpuHighPct = overrides?.cpuHighPct ?? envNumber('HARNESS_CPU_HIGH_PCT', 85);
+    this.cpuLowPct = overrides?.cpuLowPct ?? envNumber('HARNESS_CPU_LOW_PCT', 70);
+    this.modelVramGb = overrides?.modelVramGb ?? envNumber('HARNESS_MODEL_VRAM_GB', 0);
+    this.perAgentOverheadGb = overrides?.perAgentOverheadGb ?? envNumber('HARNESS_PER_AGENT_OVERHEAD_GB', 0.5);
+    this.reservedRamGbOverride =
+      overrides?.reservedRamGb ?? (process.env.HARNESS_RESERVED_RAM_GB ? envNumber('HARNESS_RESERVED_RAM_GB', 0) : null);
   }
 
   snapshot(activeWorkers: number, queuedWorkers: number): GovernorSnapshot {
@@ -98,6 +102,8 @@ export class HarnessResourceGovernor {
       reservedRamGb,
       modelVramGb: this.modelVramGb,
       perAgentOverheadGb: perAgentGb,
+      cpuHighPct: this.cpuHighPct,
+      cpuLowPct: this.cpuLowPct,
       cpuPressure,
       cpuPaused: this.cpuPaused,
       allowedAgents,

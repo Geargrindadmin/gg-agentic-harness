@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "sourceType": "normalized",
+  "summary": "Build a SaaS dashboard for revenue growth analytics with authenticated navigation, team settings, alerts, and reporting.",
+  "lane": "saas-dashboard",
+  "laneConfidence": 0.96,
+  "targetStack": "nextjs-app-router",
+  "riskTier": "medium",
+  "enterprisePacks": [
+    "design-system",
+    "observability",
+    "auth-rbac"
+  ],
+  "constraints": [
+    "Keep deterministic validation inside the harness core.",
+    "Use role-aware sections for operators and account leaders."
+  ],
+  "requiredIntegrations": [
+    "auth-provider",
+    "telemetry-provider"
+  ],
+  "acceptanceCriteria": [
+    "Deliver a buildable SaaS dashboard shell.",
+    "Include reports, settings, and role-aware access surfaces.",
+    "Emit artifacts and validation evidence through the harness."
+  ],
+  "validationProfile": "saas-dashboard",
+  "deliveryTarget": "local-repo",
+  "requiresHumanReview": true
+}

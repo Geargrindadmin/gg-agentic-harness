@@ -238,6 +238,8 @@ struct LMStudioManagerView: View {
                 sidebar
                 Divider()
                 contentArea
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .layoutPriority(1)
                 if vm.showConfigDrawer {
                     Divider()
                     configPanel
@@ -696,7 +698,7 @@ struct LMStudioManagerView: View {
             Divider().opacity(0.4)
 
             // Agent capacity
-            let cap = hwTopology.maxConcurrentAgents()
+            let cap = hwTopology.lastCapacity ?? hwTopology.maxConcurrentAgents()
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MAX CONCURRENT AGENTS")
@@ -905,6 +907,8 @@ struct LoadedModelRow: View {
                 HStack(spacing: 6) {
                     Text(ModelUserConfigStore.shared.config(for: model.id).displayName)
                         .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     if isActive {
                         Text("ACTIVE")
                             .font(.system(size: 8, weight: .bold))
@@ -914,11 +918,27 @@ struct LoadedModelRow: View {
                     }
                     Circle().fill(Color.green).frame(width: 6, height: 6)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 if let ctx = model.contextLabel {
-                    Text(ctx + " context").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(ctx + " context")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
             }
-            Spacer()
+            .layoutPriority(1)
+            actionStack
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(white: 0.12)))
+    }
+
+    @ViewBuilder
+    private var actionStack: some View {
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 6) {
                 Button("Use") { onUse() }
                     .buttonStyle(.bordered).controlSize(.small)
@@ -932,10 +952,22 @@ struct LoadedModelRow: View {
                     .tint(.red.opacity(0.7))
                     .controlSize(.small)
             }
+            VStack(alignment: .trailing, spacing: 6) {
+                Button("Use") { onUse() }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .disabled(isActive)
+                HStack(spacing: 8) {
+                    Button("Configure") { onConfigure() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Button("Unload") { onUnload() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red.opacity(0.7))
+                        .controlSize(.small)
+                }
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(white: 0.12)))
     }
 }
 
@@ -957,12 +989,29 @@ struct LibraryModelRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(ModelUserConfigStore.shared.config(for: model.id).displayName)
                     .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 if let ctx = model.contextLabel {
                     Text(ctx + " context · " + (model.publisher ?? ""))
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            actionStack
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(white: 0.10)))
+    }
+
+    @ViewBuilder
+    private var actionStack: some View {
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 6) {
                 Button("Configure") { onConfigure() }
                     .buttonStyle(.plain)
@@ -981,10 +1030,27 @@ struct LibraryModelRow: View {
                     .tint(Color(red: 0.94, green: 0.72, blue: 0.18).opacity(0.85))
                     .controlSize(.small)
             }
+            VStack(alignment: .trailing, spacing: 6) {
+                Button("Load") { onLoad() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0.94, green: 0.72, blue: 0.18).opacity(0.85))
+                    .controlSize(.small)
+                HStack(spacing: 8) {
+                    Button("Configure") { onConfigure() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Button { onDelete() } label: {
+                        Image(systemName: "trash").foregroundStyle(.red.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canDelete)
+                    .help(canDelete
+                        ? "Delete from disk"
+                        : "Delete from disk requires the LLM Studio local server API")
+                }
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(white: 0.10)))
     }
 }
 

@@ -1,0 +1,25 @@
+{
+  "id": "compliance-baseline",
+  "name": "Compliance Baseline",
+  "description": "Adds privacy, auditability, and policy-oriented scaffolding for regulated or high-accountability products.",
+  "v1Unattended": false,
+  "riskTier": "high",
+  "compatibleLanes": [
+    "saas-dashboard",
+    "admin-panel"
+  ],
+  "requiredConfig": [
+    "data-retention-policy",
+    "audit-log-policy"
+  ],
+  "addsCapabilities": [
+    "audit-trails",
+    "policy-docs",
+    "compliance-notes"
+  ],
+  "requiredGates": [
+    "docs-bundle",
+    "security-review"
+  ],
+  "reviewRequired": true
+}

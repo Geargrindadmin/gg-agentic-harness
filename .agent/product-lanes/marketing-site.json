@@ -1,0 +1,36 @@
+{
+  "id": "marketing-site",
+  "name": "Marketing Site",
+  "description": "Public-facing marketing or product website with enterprise presentation quality.",
+  "v1Mandatory": true,
+  "category": "web",
+  "allowedStacks": [
+    "nextjs-app-router",
+    "vite-react"
+  ],
+  "defaultStack": "nextjs-app-router",
+  "requiredCapabilities": [
+    "responsive-layout",
+    "seo-metadata",
+    "analytics-hooks",
+    "a11y-baseline",
+    "performance-baseline"
+  ],
+  "defaultPacks": [
+    "design-system",
+    "observability"
+  ],
+  "allowedPacks": [
+    "design-system",
+    "observability",
+    "notifications",
+    "cms-content"
+  ],
+  "requiredGates": [
+    "typecheck",
+    "lint",
+    "docs-bundle",
+    "ui-smoke",
+    "a11y-smoke"
+  ]
+}

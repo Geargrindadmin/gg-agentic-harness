@@ -1,0 +1,35 @@
+{
+  "id": "crud-shell",
+  "name": "CRUD Shell",
+  "description": "API-backed CRUD web product shell with resource management flows and typed contracts.",
+  "v1Mandatory": false,
+  "category": "web-app",
+  "allowedStacks": [
+    "nextjs-app-router",
+    "vite-react-node"
+  ],
+  "defaultStack": "vite-react-node",
+  "requiredCapabilities": [
+    "typed-models",
+    "form-validation",
+    "list-detail-edit-flows",
+    "api-contracts"
+  ],
+  "defaultPacks": [
+    "design-system",
+    "observability"
+  ],
+  "allowedPacks": [
+    "design-system",
+    "observability",
+    "auth-rbac",
+    "notifications"
+  ],
+  "requiredGates": [
+    "typecheck",
+    "lint",
+    "targeted-tests",
+    "docs-bundle",
+    "api-contract-smoke"
+  ]
+}

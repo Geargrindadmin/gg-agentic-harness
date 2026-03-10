@@ -1,5 +1,5 @@
 ---
-description: Create new application command. Triggers App Builder skill and starts interactive dialogue with user.
+description: Generate a headless application bundle from a prompt, PRD, or canonical product spec.
 ---
 
 # /create - Create Application
@@ -10,50 +10,40 @@ $ARGUMENTS
 
 ## Task
 
-This command starts a new application creation process.
+This command starts a headless application bundle generation process.
 
 ### Steps:
 
-1. **Request Analysis**
-   - Understand what the user wants
-   - If information is missing, use `conversation-manager` skill to ask
+1. **Normalize Intake**
+   - Accept a prompt, PRD path, or canonical `.spec.json`
+   - Resolve product lane, target stack, packs, and delivery target
 
-2. **Project Planning**
-   - Use `project-planner` agent for task breakdown
-   - Determine tech stack
-   - Plan file structure
-   - Create plan file and proceed to building
+2. **Generate Bundle**
+   - Build a deterministic application skeleton for supported lanes
+   - Emit source files, bundle manifest, and handoff-ready README
 
-3. **Application Building (After Approval)**
-   - Orchestrate with `app-builder` skill
-   - Coordinate expert agents:
-     - `database-architect` → Schema
-     - `backend-specialist` → API
-     - `frontend-specialist` → UI
+3. **Record Evidence**
+   - Write run artifact and canonical spec artifact
+   - Preserve preflight status and warnings in the artifact payload
 
-4. **Preview**
-   - Start with `auto_preview.py` when complete
-   - Present URL to user
+4. **Handoff**
+   - Return bundle directory, manifest path, and generated file inventory
+   - Leave validation and downstream install to explicit follow-up workflows
 
 ---
 
 ## Usage Examples
 
 ```
-/create blog site
-/create e-commerce app with product listing and cart
-/create todo app
-/create Instagram clone
-/create crm system with customer management
+/create marketing site for an AI automation platform
+/create SaaS dashboard with RBAC, billing, and settings
+/create docs/prd/headless-build.md
+/create docs/prd/admin-panel.spec.json
 ```
 
 ---
 
 ## Before Starting
 
-If request is unclear, ask these questions:
-- What type of application?
-- What are the basic features?
-- Who will use it?
-
-Use defaults, add details later.
+If the intake is underspecified, the executable surface should still normalize it and generate the closest supported lane.
+If lane confidence is low or packs require human review, record that in the run artifact rather than dropping into an interactive loop.

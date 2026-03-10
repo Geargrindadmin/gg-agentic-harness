@@ -259,4 +259,160 @@ enum FixtureControlPlaneData {
         }
         """.utf8
     )
+
+    static let harnessSettings = Data(
+        """
+        {
+          "diagram": {
+            "autoRefreshSeconds": 20,
+            "primaryArtifact": "docs/architecture/agentic-harness-dynamic-user-diagram.html"
+          },
+          "execution": {
+            "loopBudget": 28,
+            "retryLimit": 2,
+            "retryBackoffSeconds": [1, 3],
+            "promptImproverMode": "force",
+            "contextSource": "hybrid",
+            "hydraMode": "shadow",
+            "validateMode": "all",
+            "docSyncMode": "off"
+          },
+          "governor": {
+            "cpuHighPct": 90,
+            "cpuLowPct": 66,
+            "modelVramGb": null,
+            "perAgentOverheadGb": 0.7,
+            "reservedRamGb": 8
+          },
+          "artifacts": {
+            "promptVersion": "v1.2.0",
+            "workflowVersion": "v1.1.0",
+            "blueprintVersion": "v1.0.3",
+            "toolBundle": "tight-default",
+            "riskTier": "medium"
+          }
+        }
+        """.utf8
+    )
+
+    static let harnessDiagram = Data(
+        """
+        {
+          "generatedAt": "2026-03-09T14:15:00.000Z",
+          "projectRoot": "/Users/shawn/Documents/gg-agentic-harness",
+          "diagram": {
+            "title": "GG Agentic Harness",
+            "artifactPath": "/Users/shawn/Documents/gg-agentic-harness/docs/architecture/agentic-harness-dynamic-user-diagram.html",
+            "artifactRelativePath": "docs/architecture/agentic-harness-dynamic-user-diagram.html",
+            "autoRefreshSeconds": 20
+          },
+          "settings": {
+            "diagram": {
+              "autoRefreshSeconds": 20,
+              "primaryArtifact": "docs/architecture/agentic-harness-dynamic-user-diagram.html"
+            },
+            "execution": {
+              "loopBudget": 28,
+              "retryLimit": 2,
+              "retryBackoffSeconds": [1, 3],
+              "promptImproverMode": "force",
+              "contextSource": "hybrid",
+              "hydraMode": "shadow",
+              "validateMode": "all",
+              "docSyncMode": "off"
+            },
+            "governor": {
+              "cpuHighPct": 90,
+              "cpuLowPct": 66,
+              "modelVramGb": null,
+              "perAgentOverheadGb": 0.7,
+              "reservedRamGb": 8
+            },
+            "artifacts": {
+              "promptVersion": "v1.2.0",
+              "workflowVersion": "v1.1.0",
+              "blueprintVersion": "v1.0.3",
+              "toolBundle": "tight-default",
+              "riskTier": "medium"
+            }
+          },
+          "live": {
+            "status": {
+              "codex": { "available": true, "path": "/usr/local/bin/codex", "runningAcp": 1 },
+              "kimi": { "available": true, "path": "provider-api", "runningAcp": 2 },
+              "claude": { "available": true, "path": "/usr/local/bin/claude", "runningAcp": 1 },
+              "pool": { "total": 6, "active": 4, "idle": 2 },
+              "runs": { "total": 5, "running": 2 },
+              "governor": {
+                "timestamp": "2026-03-09T14:15:00.000Z",
+                "totalRamGb": 64,
+                "freeRamGb": 22.4,
+                "availableRamGb": 22.4,
+                "reservedRamGb": 8,
+                "modelVramGb": 0,
+                "perAgentOverheadGb": 0.7,
+                "cpuHighPct": 90,
+                "cpuLowPct": 66,
+                "cpuPressure": 31.5,
+                "cpuPaused": false,
+                "allowedAgents": 6,
+                "activeWorkers": 4,
+                "queuedWorkers": 1,
+                "canSpawnNow": true,
+                "note": "Medium capacity",
+                "reason": "usable 14.4 GB / 0.7 GB per agent => 6 workers"
+              },
+              "uptime": 1452.4
+            },
+            "runtimeDiscovery": {
+              "coordinatorSelection": {
+                "selected": "codex",
+                "reason": "preferred runtime available",
+                "requested": "auto"
+              },
+              "discoveries": [
+                {
+                  "runtime": "codex",
+                  "label": "Codex",
+                  "binaryPath": "/usr/local/bin/codex",
+                  "authenticated": true,
+                  "localCliAuth": true,
+                  "directApiAvailable": false,
+                  "preferredTransport": "background-terminal",
+                  "summary": "Local Codex CLI available"
+                }
+              ]
+            },
+            "activity": {
+              "totalRuns": 5,
+              "runningRuns": 2,
+              "completedRuns": 2,
+              "failedRuns": 1,
+              "activeWorkers": 4,
+              "pendingMessages": 3,
+              "latestRunId": "run-fixture",
+              "latestTask": "Render the new harness tab",
+              "latestStatus": "running",
+              "latestUpdatedAt": "2026-03-09T14:13:00.000Z"
+            },
+            "workersByRole": [
+              { "key": "builder", "label": "Builder", "count": 2 }
+            ],
+            "workersByRuntime": [
+              { "key": "kimi", "label": "Kimi", "count": 2 }
+            ],
+            "recentRuns": [
+              {
+                "runId": "run-fixture",
+                "task": "Render the new harness tab",
+                "status": "running",
+                "coordinator": "codex",
+                "workerBackend": "kimi",
+                "updatedAt": "2026-03-09T14:13:00.000Z"
+              }
+            ]
+          }
+        }
+        """.utf8
+    )
 }

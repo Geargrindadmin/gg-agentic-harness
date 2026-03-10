@@ -46,6 +46,7 @@ Current adapters:
 2. `claude`: dynamic runtime adapter with local CLI preference for live workers (no host rewrite).
 3. `kimi`: harness-owned Kimi adapter with CLI-session preference, Moonshot API fallback, and hardware/env preflight (no host rewrite).
 4. The headless control plane is runtime-agnostic and can be started independently of the macOS app with `npm run control-plane:start`.
+5. Harness-wide execution policy is stored headlessly in `.agent/control-plane/server/harness-settings.json` and may be edited from the optional macOS `Harness` tab or the `gg harness settings` CLI commands.
 
 Commands:
 
@@ -78,6 +79,7 @@ Behavior:
 10. Codex uses `background-terminal` for live workers by default.
 11. All worker spawn, queue, retry, retask, and terminate actions remain harness-controlled, even for Kimi. Kimi may request delegation, but the harness authorizes every child worker.
 12. The harness governor adopts the same safe-capacity formula exposed in the macOS app and uses it as a headless fallback for spawn limits.
+13. The governor may now take headless overrides from `harness-settings.json` before falling back to machine env vars.
 13. Dedicated worker worktrees live under `.agent/control-plane/worktrees/<runId>/<agentId>`.
 14. The macOS control surface exposes planner-selected coordinator runtime, planner-selected sub-agent runtime/team mode, `Agent Analytics`, and `Swarm` telemetry directly from the same control-plane run graph.
 15. `Swarm` telemetry includes coordinator runtime, runtime/role mix, delegation count, selected-worker runtime/persona/transport details, and worktree inspection.
@@ -90,9 +92,11 @@ Behavior:
    - `Replays`: local transcript replay rendering for Claude Code and Cursor sessions
    - `Model Fit`: local `llmfit` hardware-fit recommendations with LM Studio handoff
    - `Free Models`: provider and model catalog for free coding-model offerings
+   - `Harness`: live dynamic architecture diagram plus headless-backed loop, retry, prompt, governor, and artifact-default controls
 19. Restart Codex after codex activation so the active session loads the new repo-scoped MCP paths.
 20. `npm run harness:runtime-parity` should treat missing activation as a warning, not a repo wiring failure.
 21. Verified CGC smoke command: `npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer`.
+22. `gg harness settings get|set|reset` and `gg harness diagram --format json|html` must work even when the macOS app is not installed.
 
 ## Coordinator Selection
 

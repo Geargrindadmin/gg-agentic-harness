@@ -1153,6 +1153,12 @@ struct SetupWizardView: View {
 
             // Footer buttons
             HStack {
+                Button("Close") {
+                    showWizard = false
+                }
+                .keyboardShortcut(.cancelAction)
+                .disabled(isStepRunning)
+
                 // Hide Skip on .projectFolder — folder selection is required
                 if vm.currentStep != .welcome && vm.currentStep != .done && vm.currentStep != .projectFolder {
                     Button("Skip This Step") { vm.skipStep() }
@@ -1178,6 +1184,7 @@ struct SetupWizardView: View {
         .frame(width: 560, height: 600)
         .background(Color(NSColor.windowBackgroundColor))
         .task { await vm.refreshRuntimeDiscovery() }
+        .interactiveDismissDisabled(isStepRunning)
     }
 
     private var subtitle: String {

@@ -79,4 +79,51 @@ struct DocumentSessionStoreTests {
         #expect(second.isDirty == true)
         #expect(second.content.contains("Unsaved"))
     }
+
+    @MainActor
+    @Test
+    func sessionStagesPatchPreviewAndAppliesIntoDraft() async throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("document-session-patch-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let fileURL = rootURL.appendingPathComponent("main.swift")
+        try "print(\"hello\")\n".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let patch = """
+        --- a/main.swift
+        +++ b/main.swift
+        @@ -1 +1 @@
+        -print("hello")
+        +print("patched")
+        """
+
+        let sessionStore = DocumentSessionStore()
+        let session = sessionStore.session(
+            path: fileURL.path,
+            sourceLabel: "Workspace",
+            workspaceRootPath: rootURL.path,
+            selectedRunRootPath: nil
+        )
+
+        await session.load()
+        try await session.stagePatch(patch)
+
+        #expect(session.hasStagedPatch == true)
+        #expect(session.mode == .patch)
+        #expect(session.content == "print(\"hello\")\n")
+        #expect(session.stagedPatchPreviewContent == "print(\"patched\")\n")
+
+        session.applyStagedPatch()
+
+        #expect(session.hasStagedPatch == false)
+        #expect(session.isDirty == true)
+        #expect(session.content == "print(\"patched\")\n")
+
+        try await session.save()
+
+        #expect(session.isDirty == false)
+        #expect(try String(contentsOf: fileURL, encoding: .utf8) == "print(\"patched\")\n")
+    }
 }

@@ -11,9 +11,11 @@ enum ConsoleTab: String, CaseIterable, Identifiable {
     case freeModels    = "Free Models"
     case agentTaskBar  = "Agents"
     case agentAnalytics = "Agent Analytics"
+    case usage         = "Usage"
     case terminal      = "Terminal"
     case llmStudio     = "LLM Studio"
     case dispatch      = "Dispatch"
+    case harness       = "Harness"
     case packages      = "Packages"
     case skills        = "Skill Analytics"
     case trace         = "Trace"
@@ -33,9 +35,11 @@ enum ConsoleTab: String, CaseIterable, Identifiable {
         case .freeModels:   return "globe.americas.fill"
         case .agentTaskBar: return "list.bullet.rectangle.fill"
         case .agentAnalytics: return "chart.line.uptrend.xyaxis"
+        case .usage:       return "gauge.with.dots.needle.67percent"
         case .terminal:     return "terminal.fill"
         case .llmStudio:    return "square.and.arrow.down.on.square"
         case .dispatch:     return "paperplane.fill"
+        case .harness:      return "point.3.connected.trianglepath.dotted"
         case .packages:     return "shippingbox.fill"
         case .skills:       return "chart.bar.fill"
         case .trace:        return "magnifyingglass"
@@ -53,7 +57,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             NavigationSplitView {
-                SidebarView(selection: $shell.selectedTab, showUsage: $shell.showUsage)
+                SidebarView(selection: $shell.selectedTab)
                     .navigationSplitViewColumnWidth(
                         min: shell.sidebarCollapsed ? 52 : 220,
                         ideal: shell.sidebarCollapsed ? 52 : 236,
@@ -66,10 +70,6 @@ struct ContentView: View {
             }
             .navigationSplitViewStyle(.balanced)
             .frame(minWidth: 1220, minHeight: 678)
-            .sheet(isPresented: $shell.showUsage) {
-                UsageView()
-                    .frame(minWidth: 720, minHeight: 560)
-            }
 
             StatusBarView()
         }
@@ -87,9 +87,11 @@ struct ContentView: View {
         case .freeModels:   FreeModelsView()
         case .agentTaskBar: AgentTaskBarView()
         case .agentAnalytics: AgentAnalyticsView()
+        case .usage:        UsageView()
         case .terminal:     TerminalTabView()
         case .llmStudio:   LLMStudioTabView()
         case .dispatch:     DispatchView()
+        case .harness:      HarnessView()
         case .packages:     PackagesTabView()
         case .skills:       SkillAnalyticsView()
         case .trace:        TraceView()
@@ -104,7 +106,6 @@ struct ContentView: View {
 
 struct SidebarView: View {
     @Binding var selection: ConsoleTab
-    @Binding var showUsage: Bool
     @EnvironmentObject var forge: ForgeStore
     @EnvironmentObject private var shell: AppShellState
     @ObservedObject private var monitor = AgentMonitorService.shared
@@ -121,11 +122,13 @@ struct SidebarView: View {
         .terminal,
         .llmStudio,
         .dispatch,
+        .harness,
         .packages,
         .skills
     ]
 
     private let diagnosticTabs: [ConsoleTab] = [
+        .usage,
         .trace,
         .liveLog,
         .runHistory,
@@ -133,50 +136,53 @@ struct SidebarView: View {
     ]
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 2) {
-                header
-                    .padding(.horizontal, shell.sidebarCollapsed ? 7 : 16)
-                    .padding(.top, shell.sidebarCollapsed ? 12 : 16)
-                    .padding(.bottom, 8)
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, shell.sidebarCollapsed ? 7 : 16)
+                .padding(.top, shell.sidebarCollapsed ? 12 : 16)
+                .padding(.bottom, 8)
 
-                if !shell.sidebarCollapsed {
-                    sectionHeader("Operate")
-                }
-                ForEach(primaryTabs) { tab in
-                    SidebarButton(
-                        tab: tab,
-                        isSelected: selection == tab,
-                        badge: badgeCount(for: tab)
-                    ) {
-                        selectTab(tab)
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if !shell.sidebarCollapsed {
+                        sectionHeader("Operate")
+                    }
+                    ForEach(primaryTabs) { tab in
+                        SidebarButton(
+                            tab: tab,
+                            isSelected: selection == tab,
+                            badge: badgeCount(for: tab)
+                        ) {
+                            selectTab(tab)
+                        }
+                    }
+
+                    if !shell.sidebarCollapsed {
+                        sectionHeader("Diagnostics")
+                    }
+                    ForEach(diagnosticTabs) { tab in
+                        SidebarButton(
+                            tab: tab,
+                            isSelected: selection == tab,
+                            badge: badgeCount(for: tab)
+                        ) {
+                            selectTab(tab)
+                        }
                     }
                 }
-
-                if !shell.sidebarCollapsed {
-                    sectionHeader("Diagnostics")
-                }
-                ForEach(diagnosticTabs) { tab in
-                    SidebarButton(
-                        tab: tab,
-                        isSelected: selection == tab,
-                        badge: badgeCount(for: tab)
-                    ) {
-                        selectTab(tab)
-                    }
-                }
-
-                if !shell.sidebarCollapsed {
-                    Divider()
-                        .padding(.horizontal, 12)
-                        .padding(.top, 10)
-
-                    AgentHealthStrip()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 10)
-                }
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            if !shell.sidebarCollapsed {
+                Divider()
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+
+                AgentHealthStrip()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
+            }
         }
         .frame(
             minWidth: shell.sidebarCollapsed ? 52 : 220,
@@ -224,21 +230,6 @@ struct SidebarView: View {
                 .buttonStyle(.plain)
                 .help("Expand sidebar")
 
-                Button {
-                    showUsage = true
-                } label: {
-                    Image(systemName: "gauge.with.dots.needle.67percent")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 38, height: 38)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.white.opacity(0.05))
-                        )
-                }
-                .buttonStyle(.plain)
-                .help("Open usage, cooldown windows, and harness capacity")
-
                 statusDot
             }
             .frame(maxWidth: .infinity)
@@ -259,22 +250,6 @@ struct SidebarView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .help("Collapse sidebar")
-
-                    Button {
-                        showUsage = true
-                    } label: {
-                        Label("Usage", systemImage: "gauge.with.dots.needle.67percent")
-                            .font(.system(size: 11, weight: .semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(Color.secondary.opacity(0.12))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Open provider usage, cooldown windows, and harness capacity")
 
                     statusDot
                 }
@@ -306,9 +281,7 @@ struct SidebarView: View {
     }
 
     private func selectTab(_ tab: ConsoleTab) {
-        selection = tab
-        shell.sidebarCollapsed = true
-        shell.rightInspectorCollapsed = true
+        shell.selectTab(tab)
     }
 }
 
@@ -413,6 +386,7 @@ struct SidebarButton: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(tab.rawValue)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 7)
             .help(tab.rawValue)
@@ -444,6 +418,7 @@ struct SidebarButton: View {
                 .cornerRadius(8)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(tab.rawValue)
             .padding(.horizontal, 8)
             .help(tab.rawValue)
         }

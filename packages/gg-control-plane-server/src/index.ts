@@ -5,6 +5,15 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { URL, fileURLToPath } from 'node:url';
 import {
+  normalizeHarnessSettings,
+  readHarnessSettings,
+  resetHarnessSettings,
+  resolveHarnessDiagramPath,
+  writeHarnessSettings,
+  type HarnessExecutionSettings,
+  type HarnessSettings
+} from '../../gg-core/dist/index.js';
+import {
   buildPersonaPacket,
   createRunState,
   delegateTask,
@@ -95,6 +104,7 @@ interface TaskPayload {
   bridgeStrategy?: 'parallel' | 'sequential' | 'hierarchical';
   bridgeRoles?: string[];
   bridgeTimeoutSeconds?: number;
+  harnessSettings?: Partial<HarnessSettings>;
 }
 
 interface SteeringPayload {
@@ -166,7 +176,7 @@ interface RunEventMessage {
 
 const DEFAULT_PORT = Number(process.env.HARNESS_CONTROL_PLANE_PORT || 7891);
 const PROJECT_ROOT = path.resolve(process.env.PROJECT_ROOT || process.cwd());
-const governor = new HarnessResourceGovernor();
+let governor = buildGovernor();
 const CONTROL_PLANE_PROTOCOL_VERSION = 1;
 const CONTROL_PLANE_CAPABILITIES = [
   'runs',
@@ -184,7 +194,9 @@ const CONTROL_PLANE_CAPABILITIES = [
   'swarm-telemetry',
   'replays',
   'model-fit',
-  'free-models'
+  'free-models',
+  'harness-settings',
+  'harness-diagram'
 ] as const;
 const CONTROL_PLANE_VERSION = loadControlPlaneVersion();
 const queue: QueueItem[] = [];
@@ -216,6 +228,41 @@ function controlPlaneMeta(): ControlPlaneMetadata {
     capabilities: [...CONTROL_PLANE_CAPABILITIES],
     generatedAt: nowIso()
   };
+}
+
+function buildGovernor(): HarnessResourceGovernor {
+  return new HarnessResourceGovernor(readHarnessSettings(PROJECT_ROOT).governor);
+}
+
+function effectiveHarnessSettings(override?: Partial<HarnessSettings>): HarnessSettings {
+  if (!override) {
+    return readHarnessSettings(PROJECT_ROOT);
+  }
+  const stored = readHarnessSettings(PROJECT_ROOT);
+  return normalizeHarnessSettings({
+    ...stored,
+    ...override,
+    diagram: {
+      ...stored.diagram,
+      ...(override.diagram || {})
+    },
+    execution: {
+      ...stored.execution,
+      ...(override.execution || {})
+    },
+    governor: {
+      ...stored.governor,
+      ...(override.governor || {})
+    },
+    artifacts: {
+      ...stored.artifacts,
+      ...(override.artifacts || {})
+    }
+  });
+}
+
+function executionPolicyFromSettings(settings: HarnessSettings): HarnessExecutionSettings {
+  return settings.execution;
 }
 
 interface RuntimeDiscoverySnapshot {
@@ -573,6 +620,102 @@ function activeWorkerCountByRuntime(runtime: RuntimeId): number {
 
 function governorSnapshot() {
   return governor.snapshot(activeWorkerCount(), queue.length);
+}
+
+function currentStatusPayload() {
+  const tasks = listTaskRecords(PROJECT_ROOT);
+  const snapshot = governorSnapshot();
+  const codexDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'codex');
+  const claudeDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'claude');
+  const kimiDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'kimi');
+
+  return {
+    codex: {
+      available: codexDiscovery.authenticated,
+      path: codexDiscovery.binaryPath,
+      runningAcp: activeWorkerCountByRuntime('codex')
+    },
+    kimi: {
+      available: kimiDiscovery.authenticated,
+      path: kimiDiscovery.binaryPath || (kimiDiscovery.directApiAvailable ? 'provider-api' : null),
+      runningAcp: activeWorkerCountByRuntime('kimi')
+    },
+    claude: {
+      available: claudeDiscovery.authenticated,
+      path: claudeDiscovery.binaryPath,
+      runningAcp: activeWorkerCountByRuntime('claude')
+    },
+    pool: {
+      total: snapshot.allowedAgents,
+      active: snapshot.activeWorkers,
+      idle: Math.max(0, snapshot.allowedAgents - snapshot.activeWorkers)
+    },
+    runs: {
+      total: tasks.length,
+      running: tasks.filter((entry) => entry.status === 'running').length
+    },
+    controlPlane: controlPlaneMeta(),
+    governor: snapshot,
+    uptime: process.uptime()
+  };
+}
+
+function buildHarnessDiagramPayload() {
+  const settings = readHarnessSettings(PROJECT_ROOT);
+  const status = currentStatusPayload();
+  const runs = listTaskRecords(PROJECT_ROOT);
+  const runStates = listRunStates(PROJECT_ROOT);
+  const latestRun = runs[0] || null;
+  const activeWorkers = runStates.flatMap((run) => run.workers).filter((worker) =>
+    ['spawn_requested', 'planned', 'queued', 'running'].includes(worker.status)
+  );
+  const pendingMessages = runStates.reduce(
+    (total, run) => total + run.messages.filter((message) => !message.ackedAt).length,
+    0
+  );
+
+  return {
+    generatedAt: nowIso(),
+    projectRoot: PROJECT_ROOT,
+    diagram: {
+      title: 'GG Agentic Harness',
+      artifactPath: resolveHarnessDiagramPath(PROJECT_ROOT, settings),
+      artifactRelativePath: settings.diagram.primaryArtifact,
+      autoRefreshSeconds: settings.diagram.autoRefreshSeconds
+    },
+    settings,
+    live: {
+      status,
+      runtimeDiscovery: {
+        coordinatorSelection: selectCoordinatorRuntime(PROJECT_ROOT, null),
+        discoveries: ['codex', 'claude', 'kimi'].map((runtime) =>
+          discoverRuntimeCredentials(PROJECT_ROOT, runtime as 'codex' | 'claude' | 'kimi')
+        )
+      },
+      activity: {
+        totalRuns: runs.length,
+        runningRuns: runs.filter((entry) => entry.status === 'running').length,
+        completedRuns: runs.filter((entry) => entry.status === 'complete').length,
+        failedRuns: runs.filter((entry) => entry.status === 'failed').length,
+        activeWorkers: activeWorkers.length,
+        pendingMessages,
+        latestRunId: latestRun?.runId || null,
+        latestTask: latestRun?.task || null,
+        latestStatus: latestRun?.status || null,
+        latestUpdatedAt: latestRun?.updatedAt || latestRun?.startedAt || null
+      },
+      workersByRole: summarizeCounts(activeWorkers.map((worker) => worker.role)),
+      workersByRuntime: summarizeCounts(activeWorkers.map((worker) => worker.runtime)),
+      recentRuns: runs.slice(0, 8).map((run) => ({
+        runId: run.runId,
+        task: run.task,
+        status: run.status,
+        coordinator: run.coordinator || null,
+        workerBackend: run.workerBackend || null,
+        updatedAt: run.updatedAt || run.startedAt
+      }))
+    }
+  };
 }
 
 function classifyLogLevel(line: string): 'info' | 'warn' | 'error' | 'debug' {
@@ -1451,12 +1594,18 @@ function buildRunRecord(body: TaskPayload, runId: string, mode: DispatchMode): S
   };
 }
 
-function spawnSwarm(body: TaskPayload, runId: string, dryRun = false): { runId: string; coordinatorAgentId: string } {
+function spawnSwarm(
+  body: TaskPayload,
+  runId: string,
+  harnessSettings: HarnessSettings,
+  dryRun = false
+): { runId: string; coordinatorAgentId: string } {
   const coordinatorSelection = selectCoordinatorRuntime(PROJECT_ROOT, coordinatorRuntimeHint(body));
   const coordinatorRuntime = coordinatorSelection.selected;
   const coordinatorPersona = buildPersonaPacket(PROJECT_ROOT, defaultPersonaIdForRole('coordinator'));
   const coordinatorAgentId = 'coordinator-1';
   const coordinatorWorktree = ensureWorkerWorktree(PROJECT_ROOT, runId, coordinatorAgentId);
+  const harnessPolicy = executionPolicyFromSettings(harnessSettings);
 
   spawnWorker(PROJECT_ROOT, {
     runId,
@@ -1466,7 +1615,8 @@ function spawnSwarm(body: TaskPayload, runId: string, dryRun = false): { runId: 
     taskSummary: body.task,
     persona: coordinatorPersona,
     toolBundle: ['filesystem', 'gg-skills'],
-    worktree: coordinatorWorktree
+    worktree: coordinatorWorktree,
+    harnessPolicy
   });
   emitTaskLog(runId, `SPAWN_COORDINATOR: ${coordinatorAgentId}`);
   emitTaskLog(runId, `COORDINATOR_SELECTION: ${coordinatorRuntime} — ${coordinatorSelection.reason}`);
@@ -1494,7 +1644,8 @@ function spawnSwarm(body: TaskPayload, runId: string, dryRun = false): { runId: 
         persona,
         boardApproved: false,
         toolBundle: ['filesystem', 'gg-skills'],
-        worktree
+        worktree,
+        harnessPolicy
       } as any);
 
       if (decision.worker) {
@@ -1910,41 +2061,33 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
+    if (pathname === '/api/harness/settings' && method === 'GET') {
+      json(res, 200, readHarnessSettings(PROJECT_ROOT));
+      return;
+    }
+
+    if (pathname === '/api/harness/settings' && method === 'PUT') {
+      const body = await parseJsonBody<Partial<HarnessSettings>>(req);
+      const settings = writeHarnessSettings(PROJECT_ROOT, body);
+      governor = buildGovernor();
+      json(res, 200, settings);
+      return;
+    }
+
+    if (pathname === '/api/harness/settings/reset' && method === 'POST') {
+      const settings = resetHarnessSettings(PROJECT_ROOT);
+      governor = buildGovernor();
+      json(res, 200, settings);
+      return;
+    }
+
+    if (pathname === '/api/harness/diagram' && method === 'GET') {
+      json(res, 200, buildHarnessDiagramPayload());
+      return;
+    }
+
     if (pathname === '/api/status') {
-      const tasks = listTaskRecords(PROJECT_ROOT);
-      const snapshot = governorSnapshot();
-      const codexDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'codex');
-      const claudeDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'claude');
-      const kimiDiscovery = discoverRuntimeCredentials(PROJECT_ROOT, 'kimi');
-      json(res, 200, {
-        codex: {
-          available: codexDiscovery.authenticated,
-          path: codexDiscovery.binaryPath,
-          runningAcp: activeWorkerCountByRuntime('codex')
-        },
-        kimi: {
-          available: kimiDiscovery.authenticated,
-          path: kimiDiscovery.binaryPath || (kimiDiscovery.directApiAvailable ? 'provider-api' : null),
-          runningAcp: activeWorkerCountByRuntime('kimi')
-        },
-        claude: {
-          available: claudeDiscovery.authenticated,
-          path: claudeDiscovery.binaryPath,
-          runningAcp: activeWorkerCountByRuntime('claude')
-        },
-        pool: {
-          total: snapshot.allowedAgents,
-          active: snapshot.activeWorkers,
-          idle: Math.max(0, snapshot.allowedAgents - snapshot.activeWorkers)
-        },
-        runs: {
-          total: tasks.length,
-          running: tasks.filter((entry) => entry.status === 'running').length
-        },
-        controlPlane: controlPlaneMeta(),
-        governor: snapshot,
-        uptime: process.uptime()
-      });
+      json(res, 200, currentStatusPayload());
       return;
     }
 
@@ -2035,6 +2178,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       const runId = nextId('run');
       const mode = normalizeDispatchMode(body.mode);
       const runtime = inferRuntime(body);
+      const harnessSettings = effectiveHarnessSettings(body.harnessSettings);
       createRunState(PROJECT_ROOT, {
         runId,
         summary: body.task,
@@ -2044,6 +2188,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
       const record = writeTaskRecord(PROJECT_ROOT, buildRunRecord(body, runId, mode));
       emitTaskLog(runId, `[harness] Task accepted: ${body.task}`);
+      emitTaskLog(
+        runId,
+        `[harness] Policy: loops=${harnessSettings.execution.loopBudget} retries=${harnessSettings.execution.retryLimit} backoff=${harnessSettings.execution.retryBackoffSeconds.join(',')} prompt=${harnessSettings.execution.promptImproverMode} context=${harnessSettings.execution.contextSource} hydra=${harnessSettings.execution.hydraMode} validate=${harnessSettings.execution.validateMode}`
+      );
       emitRunEvent({
         type: 'run_created',
         runId,
@@ -2058,7 +2206,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         task: record.task
       });
 
-      spawnSwarm(body, runId, Boolean(process.env.HARNESS_DRY_RUN === '1'));
+      spawnSwarm(body, runId, harnessSettings, Boolean(process.env.HARNESS_DRY_RUN === '1'));
 
       json(res, 202, {
         runId,

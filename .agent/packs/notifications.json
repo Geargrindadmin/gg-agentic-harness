@@ -1,0 +1,25 @@
+{
+  "id": "notifications",
+  "name": "Notifications",
+  "description": "Adds user-facing notification channels and operational notification integration points.",
+  "v1Unattended": false,
+  "riskTier": "medium",
+  "compatibleLanes": [
+    "marketing-site",
+    "saas-dashboard",
+    "admin-panel",
+    "crud-shell",
+    "content-portal"
+  ],
+  "requiredConfig": [
+    "notification-channels"
+  ],
+  "addsCapabilities": [
+    "notification-hooks",
+    "message-templates"
+  ],
+  "requiredGates": [
+    "targeted-tests"
+  ],
+  "reviewRequired": true
+}

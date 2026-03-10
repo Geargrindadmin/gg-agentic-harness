@@ -30,4 +30,43 @@ struct GitWorktreeStoreTests {
         #expect(parsed[2].branch == "feature/agent")
         #expect(parsed[2].prunable == true)
     }
+
+    @MainActor
+    @Test
+    func summaryLookupNormalizesPathsAcrossGroups() {
+        let store = GitWorktreeStore.shared
+        store.groups = [
+            GitWorktreeGroup(
+                title: "run-1",
+                subtitle: nil,
+                worktrees: [
+                    GitWorktreeSummary(
+                        path: "/tmp/repo/.agent/control-plane/worktrees/run-1/builder-1",
+                        label: "builder-1",
+                        branch: "feature/agent",
+                        head: "abc123",
+                        detached: false,
+                        prunable: false,
+                        isMain: false,
+                        runId: "run-1",
+                        agentId: "builder-1",
+                        runtime: "kimi",
+                        role: "builder",
+                        aheadCount: nil,
+                        behindCount: nil,
+                        changedFilesCount: 2,
+                        untrackedFilesCount: 0,
+                        changedFilesList: [
+                            "/tmp/repo/.agent/control-plane/worktrees/run-1/builder-1/src/app.ts",
+                            "/tmp/repo/.agent/control-plane/worktrees/run-1/builder-1/README.md"
+                        ]
+                    )
+                ]
+            )
+        ]
+
+        let summary = store.summary(for: "/tmp/repo/.agent/control-plane/worktrees/run-1/./builder-1")
+        #expect(summary?.agentId == "builder-1")
+        #expect(store.changedFiles(for: "/tmp/repo/.agent/control-plane/worktrees/run-1/builder-1").count == 2)
+    }
 }

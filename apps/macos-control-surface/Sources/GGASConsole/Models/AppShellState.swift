@@ -22,6 +22,7 @@ struct TerminalLaunchRequest: Identifiable, Equatable {
 
 enum IDEPanelTab: String, CaseIterable, Identifiable {
     case explorer = "Explorer"
+    case problems = "Problems"
     case worktrees = "Worktrees"
     case context = "Context"
     case extensions = "Extensions"
@@ -31,6 +32,7 @@ enum IDEPanelTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .explorer: return "folder"
+        case .problems: return "exclamationmark.triangle"
         case .worktrees: return "square.stack.3d.down.forward"
         case .context: return "scope"
         case .extensions: return "puzzlepiece.extension"
@@ -61,13 +63,13 @@ final class AppShellState: ObservableObject {
     private static let rightInspectorCollapsedKey = "gg_right_inspector_collapsed"
 
     @Published var selectedTab: ConsoleTab = .tasks
-    @Published var showUsage = false
     @Published var lmStudioCatalogQuery = ""
     @Published var lmStudioAutoDownload = false
     @Published var idePanelTab: IDEPanelTab = .explorer
     @Published var explorerRootMode: ExplorerRootMode = .gitWorktrees
     @Published var focusedWorktreePath: String?
     @Published var focusedWorktreeLabel: String = "Focused Worktree"
+    @Published var selectedProblemId: String?
     @Published var openDocuments: [IDEDocumentContext] = []
     @Published var activeDocumentId: String?
     @Published var pendingTerminalLaunch: TerminalLaunchRequest?
@@ -95,7 +97,17 @@ final class AppShellState: ObservableObject {
     func openLMStudioCatalog(query: String = "", autoDownload: Bool = false) {
         lmStudioCatalogQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         lmStudioAutoDownload = autoDownload
-        selectedTab = .llmStudio
+        selectTab(.llmStudio)
+    }
+
+    func selectTab(_ tab: ConsoleTab) {
+        selectedTab = tab
+        activeDocumentId = nil
+        rightInspectorCollapsed = true
+    }
+
+    func openUsage() {
+        selectTab(.usage)
     }
 
     func openDocument(path: String, sourceLabel: String) {
@@ -104,6 +116,12 @@ final class AppShellState: ObservableObject {
             openDocuments.append(document)
         }
         activeDocumentId = document.id
+    }
+
+    func selectProblem(id: String?) {
+        selectedProblemId = id
+        idePanelTab = .problems
+        rightInspectorCollapsed = false
     }
 
     func selectDocument(_ document: IDEDocumentContext) {
@@ -152,7 +170,7 @@ final class AppShellState: ObservableObject {
         )
         switch destination {
         case .terminalTab:
-            selectedTab = .terminal
+            selectTab(.terminal)
         case .workspaceDock:
             ideTerminalDockVisible = true
         }

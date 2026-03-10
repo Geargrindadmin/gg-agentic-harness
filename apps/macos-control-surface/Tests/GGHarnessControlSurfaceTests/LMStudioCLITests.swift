@@ -43,4 +43,19 @@ struct LMStudioCLITests {
         #expect(ids.contains("qwen/qwen3.5-9b@q8_0"))
         #expect(ids.contains("zai-org/glm-4.7-flash@q4_k_m"))
     }
+
+    @MainActor
+    @Test
+    func unloadIdentifierCandidatesPreferLoadedIdentifierMatches() {
+        let candidates = LMStudioEngine.unloadIdentifierCandidates(
+            for: "lmstudio-community/Qwen2.5-Coder-7B-Instruct-GGUF/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+            loadedIds: [
+                "lmstudio-community/Qwen2.5-Coder-7B-Instruct-GGUF/Qwen2.5-Coder-7B-Instruct-Q4_K_M",
+                "other/model@q4"
+            ]
+        )
+
+        #expect(candidates.contains("lmstudio-community/Qwen2.5-Coder-7B-Instruct-GGUF/Qwen2.5-Coder-7B-Instruct-Q4_K_M"))
+        #expect(candidates.first == "lmstudio-community/Qwen2.5-Coder-7B-Instruct-GGUF/Qwen2.5-Coder-7B-Instruct-Q4_K_M")
+    }
 }

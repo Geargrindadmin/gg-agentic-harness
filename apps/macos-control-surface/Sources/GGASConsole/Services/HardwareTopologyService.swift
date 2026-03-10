@@ -50,6 +50,12 @@ final class HardwareTopologyService: ObservableObject {
         availableRAMGB = readAvailableRAMGB()
         interfaces     = await detectInterfaces()
         hasThunderboltBridge = interfaces.contains { $0.isThunderbolt }
+        lastCapacity = calculateCapacity(
+            totalRAMGB: totalRAMGB,
+            availableRAMGB: availableRAMGB,
+            modelVRAMGB: 0,
+            perAgentOverheadGB: 0.5
+        )
     }
 
     // MARK: - Capacity calculation (conservative — 80% of available RAM)
@@ -64,6 +70,20 @@ final class HardwareTopologyService: ObservableObject {
 
     func maxConcurrentAgents(modelVRAMGB: Double = 0,
                               perAgentOverheadGB: Double = 0.5) -> AgentCapacity {
+        calculateCapacity(
+            totalRAMGB: totalRAMGB,
+            availableRAMGB: availableRAMGB,
+            modelVRAMGB: modelVRAMGB,
+            perAgentOverheadGB: perAgentOverheadGB
+        )
+    }
+
+    private func calculateCapacity(
+        totalRAMGB: Double,
+        availableRAMGB: Double,
+        modelVRAMGB: Double,
+        perAgentOverheadGB: Double
+    ) -> AgentCapacity {
         let reserved       = max(2.0, totalRAMGB * 0.20)  // 20% floor or 2 GB
         let afterModel     = max(0, availableRAMGB - modelVRAMGB)  // subtract loaded model footprint
         let usable         = max(0, afterModel - reserved)
@@ -82,15 +102,13 @@ final class HardwareTopologyService: ObservableObject {
             note = "Low capacity — limit spawning, close other apps"
         }
 
-        let result = AgentCapacity(
+        return AgentCapacity(
             maxConcurrentAgents: clamped,
             availableRAMGB: availableRAMGB,
             reservedRAMGB: reserved,
             perAgentRAMGB: perAgent,
             note: note
         )
-        lastCapacity = result
-        return result
     }
 
     // MARK: - Thunderbolt detection

@@ -1,0 +1,23 @@
+{
+  "id": "admin-ops",
+  "name": "Admin Operations",
+  "description": "Adds operator-focused status, audit, and control surfaces for internal administration workflows.",
+  "v1Unattended": false,
+  "riskTier": "medium",
+  "compatibleLanes": [
+    "admin-panel"
+  ],
+  "requiredConfig": [
+    "operator-roles"
+  ],
+  "addsCapabilities": [
+    "operator-controls",
+    "audit-views",
+    "status-panels"
+  ],
+  "requiredGates": [
+    "operational-smoke",
+    "targeted-tests"
+  ],
+  "reviewRequired": true
+}

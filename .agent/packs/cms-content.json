@@ -1,0 +1,23 @@
+{
+  "id": "cms-content",
+  "name": "CMS Content",
+  "description": "Adds editable content structures, publishing surfaces, and content modeling primitives.",
+  "v1Unattended": false,
+  "riskTier": "medium",
+  "compatibleLanes": [
+    "marketing-site",
+    "content-portal"
+  ],
+  "requiredConfig": [
+    "content-source"
+  ],
+  "addsCapabilities": [
+    "content-models",
+    "publishing-flow"
+  ],
+  "requiredGates": [
+    "content-smoke",
+    "docs-bundle"
+  ],
+  "reviewRequired": true
+}

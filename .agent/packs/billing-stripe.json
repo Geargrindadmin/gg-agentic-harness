@@ -1,0 +1,26 @@
+{
+  "id": "billing-stripe",
+  "name": "Billing via Stripe",
+  "description": "Adds subscription or billing surfaces backed by Stripe-oriented contracts and validation requirements.",
+  "v1Unattended": false,
+  "riskTier": "high",
+  "compatibleLanes": [
+    "saas-dashboard"
+  ],
+  "requiredConfig": [
+    "stripe-secret-key",
+    "stripe-publishable-key",
+    "billing-mode"
+  ],
+  "addsCapabilities": [
+    "billing-settings",
+    "subscription-contracts",
+    "payment-integration-points"
+  ],
+  "requiredGates": [
+    "targeted-tests",
+    "api-contract-smoke",
+    "security-review"
+  ],
+  "reviewRequired": true
+}

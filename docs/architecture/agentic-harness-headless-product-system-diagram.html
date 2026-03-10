@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GG Agentic Harness - Headless Product System Map</title>
+  <style>
+    :root {
+      --bg: #08111a;
+      --panel: #111c29;
+      --panel-soft: #162434;
+      --line: #29435f;
+      --text: #eef5ff;
+      --muted: #a9bdd4;
+      --blue: #76c5ff;
+      --green: #77e0aa;
+      --amber: #ffd179;
+      --red: #ff9d95;
+      --violet: #bda8ff;
+      --teal: #63e3dc;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(980px 520px at 100% 0%, rgba(34, 63, 97, 0.42), transparent 60%),
+        radial-gradient(960px 520px at 0% 100%, rgba(23, 52, 80, 0.36), transparent 58%),
+        var(--bg);
+    }
+
+    .wrap {
+      max-width: 1700px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .hero,
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 20px;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #101b29, #15263a);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 31px;
+      letter-spacing: 0.01em;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      max-width: 1080px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 11px;
+      background: rgba(10, 18, 28, 0.72);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .span-12 { grid-column: span 12; }
+    .span-4 { grid-column: span 4; }
+
+    .card {
+      padding: 14px;
+    }
+
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0d1622;
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-soft);
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .item strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      flex: 0 0 auto;
+    }
+
+    code { color: #d4e6ff; }
+
+    @media (max-width: 1320px) {
+      .span-4 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>GG Agentic Harness - Headless Product System Map</h1>
+      <p class="sub">
+        Single-diagram view of the harness as it exists now: the executable entry surfaces, shared <code>gg-core</code> modules,
+        workflow adapters, registries, deterministic gates, run artifacts, and the new headless product bundle path that can later be installed into <code>GGV3</code>.
+      </p>
+      <div class="chips">
+        <span class="chip">CLI surface: <code>packages/gg-cli/src/index.ts</code></span>
+        <span class="chip">Shared core: <code>preflight.ts</code> + <code>product-spec.ts</code> + <code>product-builder.ts</code></span>
+        <span class="chip">Registries: <code>.agent/product-lanes/*.json</code> + <code>.agent/packs/*.json</code></span>
+        <span class="chip">Artifacts: <code>.agent/runs/*.json</code> + <code>.agent/product-bundles/*</code></span>
+        <span class="chip">Workflow contracts: <code>create</code> + <code>go</code> + <code>minion</code> + <code>agentic-status</code></span>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card span-12">
+        <h2>System Diagram</h2>
+        <div class="meta">Focus: one-shot headless product intake, routing, generation, validation ownership, and downstream handoff.</div>
+        <svg viewBox="0 0 2200 1360" role="img" aria-label="Headless product system map for GG Agentic Harness">
+          <defs>
+            <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+              <polygon points="0,0 10,5 0,10" fill="#76c5ff"></polygon>
+            </marker>
+            <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+              <polygon points="0,0 10,5 0,10" fill="#77e0aa"></polygon>
+            </marker>
+            <marker id="arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+              <polygon points="0,0 10,5 0,10" fill="#ffd179"></polygon>
+            </marker>
+            <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+              <polygon points="0,0 10,5 0,10" fill="#ff9d95"></polygon>
+            </marker>
+            <marker id="arrow-violet" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+              <polygon points="0,0 10,5 0,10" fill="#bda8ff"></polygon>
+            </marker>
+          </defs>
+
+          <rect x="20" y="20" width="2160" height="1320" rx="16" fill="#0b1622" stroke="#2d4867" />
+
+          <rect x="50" y="60" width="2100" height="185" rx="12" fill="#122233" stroke="#35577c" />
+          <text x="72" y="86" fill="#8fc9ff" font-size="14" font-weight="700">Lane A: Headless Entry Surfaces</text>
+
+          <rect x="50" y="270" width="2100" height="255" rx="12" fill="#15273a" stroke="#3d6f98" />
+          <text x="72" y="296" fill="#97d6ff" font-size="14" font-weight="700">Lane B: Shared Intake, Contract Resolution, and Runtime Gates</text>
+
+          <rect x="50" y="550" width="2100" height="305" rx="12" fill="#1b2e2f" stroke="#4e836d" />
+          <text x="72" y="576" fill="#a8e7c3" font-size="14" font-weight="700">Lane C: Executable Workflow Adapters and Headless Engines</text>
+
+          <rect x="50" y="880" width="2100" height="420" rx="12" fill="#2e291c" stroke="#8f8255" />
+          <text x="72" y="906" fill="#ffe2a0" font-size="14" font-weight="700">Lane D: Outputs, Generated Bundles, and Downstream Install</text>
+
+          <rect x="90" y="108" width="250" height="92" rx="10" fill="#1e3853" stroke="#659fd4" />
+          <text x="215" y="136" text-anchor="middle" fill="#eff8ff" font-size="14" font-weight="700">Input Sources</text>
+          <text x="215" y="158" text-anchor="middle" fill="#c7dcef" font-size="12">Prompt</text>
+          <text x="215" y="176" text-anchor="middle" fill="#c7dcef" font-size="12">PRD markdown path</text>
+          <text x="215" y="194" text-anchor="middle" fill="#c7dcef" font-size="12">Canonical <tspan font-family="IBM Plex Mono, monospace">.spec.json</tspan></text>
+
+          <rect x="410" y="96" width="300" height="108" rx="10" fill="#24405f" stroke="#70adde" />
+          <text x="560" y="126" text-anchor="middle" fill="#eff9ff" font-size="14" font-weight="700">workflow run create</text>
+          <text x="560" y="149" text-anchor="middle" fill="#c9e0f2" font-size="12">Headless bundle generation</text>
+          <text x="560" y="168" text-anchor="middle" fill="#c9e0f2" font-size="12">Deterministic output writer</text>
+          <text x="560" y="187" text-anchor="middle" fill="#ffdca8" font-size="11">Preflight warnings recorded, not blocking</text>
+
+          <rect x="760" y="96" width="280" height="108" rx="10" fill="#24435f" stroke="#73b4e2" />
+          <text x="900" y="126" text-anchor="middle" fill="#eff9ff" font-size="14" font-weight="700">workflow run go</text>
+          <text x="900" y="149" text-anchor="middle" fill="#cae1f2" font-size="12">Goal intake + routing</text>
+          <text x="900" y="168" text-anchor="middle" fill="#cae1f2" font-size="12">Canonical spec + paperclip plan</text>
+          <text x="900" y="187" text-anchor="middle" fill="#ffb8aa" font-size="11">Preflight fail-fast</text>
+
+          <rect x="1090" y="96" width="280" height="108" rx="10" fill="#244561" stroke="#78bae6" />
+          <text x="1230" y="126" text-anchor="middle" fill="#effaff" font-size="14" font-weight="700">workflow run minion</text>
+          <text x="1230" y="149" text-anchor="middle" fill="#cee4f4" font-size="12">Autonomous task execution</text>
+          <text x="1230" y="168" text-anchor="middle" fill="#cee4f4" font-size="12">Canonical spec + symphony-lite</text>
+          <text x="1230" y="187" text-anchor="middle" fill="#ffb8aa" font-size="11">Preflight fail-fast</text>
+
+          <rect x="1420" y="96" width="300" height="108" rx="10" fill="#274965" stroke="#7dc2ea" />
+          <text x="1570" y="126" text-anchor="middle" fill="#f1fbff" font-size="14" font-weight="700">workflow run agentic-status</text>
+          <text x="1570" y="149" text-anchor="middle" fill="#d4e8f5" font-size="12">Live headless status surface</text>
+          <text x="1570" y="168" text-anchor="middle" fill="#d4e8f5" font-size="12">Runtime, drift, runs, control-plane health</text>
+          <text x="1570" y="187" text-anchor="middle" fill="#ffb8aa" font-size="11">Preflight fail-fast</text>
+
+          <rect x="1770" y="96" width="320" height="108" rx="10" fill="#2a4d6d" stroke="#86caf0" />
+          <text x="1930" y="126" text-anchor="middle" fill="#f2fbff" font-size="14" font-weight="700">Workflow Contracts on Disk</text>
+          <text x="1930" y="149" text-anchor="middle" fill="#d8ebf7" font-size="12">.agent/workflows/create.md</text>
+          <text x="1930" y="168" text-anchor="middle" fill="#d8ebf7" font-size="12">go.md · minion.md · agentic-status.md</text>
+          <text x="1930" y="187" text-anchor="middle" fill="#d8ebf7" font-size="12">paperclip-extracted.md · symphony-lite.md</text>
+
+          <rect x="100" y="330" width="290" height="86" rx="10" fill="#2a435d" stroke="#8ebce6" />
+          <text x="245" y="358" text-anchor="middle" fill="#eef8ff" font-size="14" font-weight="700">Prompt Improver Envelope</text>
+          <text x="245" y="381" text-anchor="middle" fill="#d4e1ef" font-size="12">normalized objective</text>
+          <text x="245" y="399" text-anchor="middle" fill="#d4e1ef" font-size="12">constraints + acceptance criteria</text>
+
+          <rect x="450" y="330" width="290" height="86" rx="10" fill="#2d4660" stroke="#95c2e9" />
+          <text x="595" y="358" text-anchor="middle" fill="#f0f9ff" font-size="14" font-weight="700">resolveGoSourceInput</text>
+          <text x="595" y="381" text-anchor="middle" fill="#d8e4f1" font-size="12">prompt / prd / normalized source type</text>
+          <text x="595" y="399" text-anchor="middle" fill="#d8e4f1" font-size="12">source text + source path</text>
+
+          <rect x="800" y="317" width="350" height="112" rx="10" fill="#31506d" stroke="#9ccbee" />
+          <text x="975" y="347" text-anchor="middle" fill="#f3fbff" font-size="14" font-weight="700">buildCanonicalProductSpec</text>
+          <text x="975" y="370" text-anchor="middle" fill="#dde8f4" font-size="12">lane resolution + stack selection</text>
+          <text x="975" y="388" text-anchor="middle" fill="#dde8f4" font-size="12">pack resolution + delivery target</text>
+          <text x="975" y="406" text-anchor="middle" fill="#dde8f4" font-size="12">risk tier + review reasons + validation profile</text>
+
+          <rect x="1210" y="304" width="320" height="138" rx="10" fill="#2b4a50" stroke="#6fd4c7" />
+          <text x="1370" y="334" text-anchor="middle" fill="#eefdfb" font-size="14" font-weight="700">Contract Registries</text>
+          <text x="1370" y="358" text-anchor="middle" fill="#cfebe7" font-size="12">.agent/product-lanes/*.json</text>
+          <text x="1370" y="376" text-anchor="middle" fill="#cfebe7" font-size="12">.agent/packs/*.json</text>
+          <text x="1370" y="394" text-anchor="middle" fill="#cfebe7" font-size="12">.agent/schemas/canonical-product-spec.schema.json</text>
+          <text x="1370" y="412" text-anchor="middle" fill="#cfebe7" font-size="12">evals/headless-product-corpus.json</text>
+
+          <rect x="1590" y="304" width="460" height="138" rx="10" fill="#4f3c37" stroke="#de988f" />
+          <text x="1820" y="334" text-anchor="middle" fill="#fff1ef" font-size="14" font-weight="700">getHarnessExecutionPreflight</text>
+          <text x="1820" y="358" text-anchor="middle" fill="#f0d2cd" font-size="12">runtime-project-sync.mjs</text>
+          <text x="1820" y="376" text-anchor="middle" fill="#f0d2cd" font-size="12">runtime-parity-smoke.mjs</text>
+          <text x="1820" y="394" text-anchor="middle" fill="#f0d2cd" font-size="12">generate-project-context.mjs --check</text>
+          <text x="1820" y="412" text-anchor="middle" fill="#f0d2cd" font-size="12">go/minion/status block; create records warning and continues</text>
+
+          <rect x="120" y="610" width="420" height="150" rx="10" fill="#24523e" stroke="#72cfa0" />
+          <text x="330" y="640" text-anchor="middle" fill="#effff5" font-size="15" font-weight="700">gg-cli Executable Adapter Layer</text>
+          <text x="330" y="666" text-anchor="middle" fill="#d1efdc" font-size="12">runCreateWorkflow()</text>
+          <text x="330" y="684" text-anchor="middle" fill="#d1efdc" font-size="12">runGoWorkflow()</text>
+          <text x="330" y="702" text-anchor="middle" fill="#d1efdc" font-size="12">runMinionWorkflow()</text>
+          <text x="330" y="720" text-anchor="middle" fill="#d1efdc" font-size="12">runAgenticStatusWorkflow()</text>
+          <text x="330" y="742" text-anchor="middle" fill="#d1efdc" font-size="11">packages/gg-cli/src/index.ts</text>
+
+          <rect x="610" y="596" width="360" height="178" rx="10" fill="#295744" stroke="#7ad7aa" />
+          <text x="790" y="628" text-anchor="middle" fill="#f1fff6" font-size="15" font-weight="700">gg-core Headless Product Engine</text>
+          <text x="790" y="654" text-anchor="middle" fill="#d3f0dd" font-size="12">preflight.ts</text>
+          <text x="790" y="672" text-anchor="middle" fill="#d3f0dd" font-size="12">product-spec.ts</text>
+          <text x="790" y="690" text-anchor="middle" fill="#d3f0dd" font-size="12">product-builder.ts</text>
+          <text x="790" y="714" text-anchor="middle" fill="#d3f0dd" font-size="12">createProductBundle()</text>
+          <text x="790" y="732" text-anchor="middle" fill="#d3f0dd" font-size="12">portable Next.js App Router skeletons</text>
+          <text x="790" y="750" text-anchor="middle" fill="#d3f0dd" font-size="12">marketing-site · saas-dashboard · admin-panel</text>
+
+          <rect x="1030" y="600" width="280" height="92" rx="10" fill="#315547" stroke="#82d4ac" />
+          <text x="1170" y="628" text-anchor="middle" fill="#f2fff7" font-size="14" font-weight="700">paperclip-extracted</text>
+          <text x="1170" y="651" text-anchor="middle" fill="#d7efdf" font-size="12">go routing plan</text>
+          <text x="1170" y="669" text-anchor="middle" fill="#d7efdf" font-size="12">primary workflow + validators</text>
+
+          <rect x="1360" y="600" width="280" height="92" rx="10" fill="#35584a" stroke="#88d9b2" />
+          <text x="1500" y="628" text-anchor="middle" fill="#f3fff8" font-size="14" font-weight="700">hydra-sidecar</text>
+          <text x="1500" y="651" text-anchor="middle" fill="#dbf1e2" font-size="12">optional off | shadow | active</text>
+          <text x="1500" y="669" text-anchor="middle" fill="#dbf1e2" font-size="12">never bypasses harness ownership</text>
+
+          <rect x="1030" y="720" width="280" height="92" rx="10" fill="#2f4f43" stroke="#7dd1a7" />
+          <text x="1170" y="748" text-anchor="middle" fill="#f0fff6" font-size="14" font-weight="700">symphony-lite</text>
+          <text x="1170" y="771" text-anchor="middle" fill="#d6efdf" font-size="12">minion delegated execution</text>
+          <text x="1170" y="789" text-anchor="middle" fill="#d6efdf" font-size="12">HANDOFF_READY / BLOCKED</text>
+
+          <rect x="1360" y="720" width="280" height="92" rx="10" fill="#315145" stroke="#84d6ad" />
+          <text x="1500" y="748" text-anchor="middle" fill="#f1fff6" font-size="14" font-weight="700">full-doc-update</text>
+          <text x="1500" y="771" text-anchor="middle" fill="#d7efe0" font-size="12">doc-sync evidence</text>
+          <text x="1500" y="789" text-anchor="middle" fill="#d7efe0" font-size="12">report + drift follow-up</text>
+
+          <rect x="1700" y="596" width="300" height="216" rx="10" fill="#2b4d4f" stroke="#71d7cf" />
+          <text x="1850" y="628" text-anchor="middle" fill="#eefdfd" font-size="15" font-weight="700">agentic-status Payload Builder</text>
+          <text x="1850" y="652" text-anchor="middle" fill="#d1ece9" font-size="12">activation checks</text>
+          <text x="1850" y="670" text-anchor="middle" fill="#d1ece9" font-size="12">runtime parity checks</text>
+          <text x="1850" y="688" text-anchor="middle" fill="#d1ece9" font-size="12">project-context freshness</text>
+          <text x="1850" y="706" text-anchor="middle" fill="#d1ece9" font-size="12">catalog counts</text>
+          <text x="1850" y="724" text-anchor="middle" fill="#d1ece9" font-size="12">control-plane state</text>
+          <text x="1850" y="742" text-anchor="middle" fill="#d1ece9" font-size="12">recent runs</text>
+          <text x="1850" y="760" text-anchor="middle" fill="#d1ece9" font-size="12">overall health grading</text>
+
+          <rect x="100" y="946" width="300" height="112" rx="10" fill="#4a4229" stroke="#d6b873" />
+          <text x="250" y="978" text-anchor="middle" fill="#fff7e5" font-size="15" font-weight="700">Run Artifacts</text>
+          <text x="250" y="1004" text-anchor="middle" fill="#efdeb4" font-size="12">.agent/runs/create-*.json</text>
+          <text x="250" y="1022" text-anchor="middle" fill="#efdeb4" font-size="12">.agent/runs/go-*.json</text>
+          <text x="250" y="1040" text-anchor="middle" fill="#efdeb4" font-size="12">.agent/runs/minion-*.json</text>
+
+          <rect x="450" y="946" width="300" height="112" rx="10" fill="#51462b" stroke="#ddbf78" />
+          <text x="600" y="978" text-anchor="middle" fill="#fff8e7" font-size="15" font-weight="700">Spec Artifacts</text>
+          <text x="600" y="1004" text-anchor="middle" fill="#f1dfb8" font-size="12">create-*.spec.json</text>
+          <text x="600" y="1022" text-anchor="middle" fill="#f1dfb8" font-size="12">go-*.spec.json</text>
+          <text x="600" y="1040" text-anchor="middle" fill="#f1dfb8" font-size="12">minion-*.spec.json</text>
+
+          <rect x="800" y="930" width="360" height="144" rx="10" fill="#5a4b2d" stroke="#e5c87d" />
+          <text x="980" y="962" text-anchor="middle" fill="#fff9e8" font-size="15" font-weight="700">Product Bundle Output</text>
+          <text x="980" y="988" text-anchor="middle" fill="#f3e3bb" font-size="12">.agent/product-bundles/&lt;bundle&gt;/</text>
+          <text x="980" y="1006" text-anchor="middle" fill="#f3e3bb" font-size="12">package.json · tsconfig.json · next.config.ts</text>
+          <text x="980" y="1024" text-anchor="middle" fill="#f3e3bb" font-size="12">src/app/* pages · ui components · lib/site.ts</text>
+          <text x="980" y="1042" text-anchor="middle" fill="#f3e3bb" font-size="12">README.md · .env.example · health route</text>
+
+          <rect x="1210" y="930" width="320" height="144" rx="10" fill="#604f31" stroke="#ebcf83" />
+          <text x="1370" y="962" text-anchor="middle" fill="#fff9e9" font-size="15" font-weight="700">Bundle Manifest</text>
+          <text x="1370" y="988" text-anchor="middle" fill="#f5e5bd" font-size="12">gg-product-bundle.json</text>
+          <text x="1370" y="1006" text-anchor="middle" fill="#f5e5bd" font-size="12">lane, stack, packs, gates, commands</text>
+          <text x="1370" y="1024" text-anchor="middle" fill="#f5e5bd" font-size="12">acceptance criteria + constraints</text>
+          <text x="1370" y="1042" text-anchor="middle" fill="#f5e5bd" font-size="12">required integrations + review contract</text>
+
+          <rect x="1580" y="930" width="250" height="144" rx="10" fill="#5d4537" stroke="#efad97" />
+          <text x="1705" y="962" text-anchor="middle" fill="#fff1ed" font-size="15" font-weight="700">Supported Lanes</text>
+          <text x="1705" y="988" text-anchor="middle" fill="#f2d4ce" font-size="12">marketing-site</text>
+          <text x="1705" y="1006" text-anchor="middle" fill="#f2d4ce" font-size="12">saas-dashboard</text>
+          <text x="1705" y="1024" text-anchor="middle" fill="#f2d4ce" font-size="12">admin-panel</text>
+          <text x="1705" y="1042" text-anchor="middle" fill="#f2d4ce" font-size="12">portable starter proof set</text>
+
+          <rect x="1880" y="930" width="210" height="144" rx="10" fill="#4a3c66" stroke="#c7b4ff" />
+          <text x="1985" y="962" text-anchor="middle" fill="#f4f0ff" font-size="15" font-weight="700">Downstream Target</text>
+          <text x="1985" y="988" text-anchor="middle" fill="#ddd2ff" font-size="12">Install into</text>
+          <text x="1985" y="1008" text-anchor="middle" fill="#ddd2ff" font-size="16" font-weight="700">GGV3</text>
+          <text x="1985" y="1030" text-anchor="middle" fill="#ddd2ff" font-size="12">after harness proof</text>
+          <text x="1985" y="1048" text-anchor="middle" fill="#ddd2ff" font-size="12">and bundle validation</text>
+
+          <rect x="100" y="1110" width="760" height="142" rx="10" fill="#403a27" stroke="#cab373" />
+          <text x="130" y="1140" fill="#fff7e4" font-size="15" font-weight="700">Live Proof Captured in This Repo</text>
+          <text x="130" y="1168" fill="#efdeb4" font-size="12">create-mmjy8v4a-ac122h - successful headless bundle generation</text>
+          <text x="130" y="1188" fill="#efdeb4" font-size="12">Bundle path: .agent/product-bundles/live-marketing-bundle/</text>
+          <text x="130" y="1208" fill="#efdeb4" font-size="12">Manifest: .agent/product-bundles/live-marketing-bundle/gg-product-bundle.json</text>
+          <text x="130" y="1228" fill="#efdeb4" font-size="12">Artifacts: .agent/runs/create-mmjy8v4a-ac122h.json + create-mmjy8v4a-ac122h.spec.json</text>
+
+          <rect x="900" y="1110" width="500" height="142" rx="10" fill="#3e3b57" stroke="#b8a8ef" />
+          <text x="930" y="1140" fill="#f4f0ff" font-size="15" font-weight="700">Deterministic Ownership Rules</text>
+          <text x="930" y="1168" fill="#ddd4ff" font-size="12">go / minion / agentic-status block when runtime activation, parity, or project context are not runnable.</text>
+          <text x="930" y="1188" fill="#ddd4ff" font-size="12">create still generates a deterministic bundle but records preflight warnings in the run artifact.</text>
+          <text x="930" y="1208" fill="#ddd4ff" font-size="12">Hydra remains advisory and cannot bypass the harness contract or deterministic gates.</text>
+
+          <rect x="1440" y="1110" width="650" height="142" rx="10" fill="#3a4b4d" stroke="#7cded5" />
+          <text x="1470" y="1140" fill="#eefdfc" font-size="15" font-weight="700">What Changed in This Batch</text>
+          <text x="1470" y="1168" fill="#d1ece9" font-size="12">1. Shared preflight moved into gg-core.</text>
+          <text x="1470" y="1188" fill="#d1ece9" font-size="12">2. Shared canonical product-spec resolution moved into gg-core.</text>
+          <text x="1470" y="1208" fill="#d1ece9" font-size="12">3. createProductBundle() now emits real headless app bundles.</text>
+          <text x="1470" y="1228" fill="#d1ece9" font-size="12">4. workflow run create is now the first executable product-builder surface.</text>
+
+          <line x1="340" y1="154" x2="410" y2="150" stroke="#76c5ff" stroke-width="3" marker-end="url(#arrow-blue)" />
+          <line x1="340" y1="154" x2="760" y2="150" stroke="#76c5ff" stroke-width="3" marker-end="url(#arrow-blue)" />
+          <line x1="340" y1="154" x2="1090" y2="150" stroke="#76c5ff" stroke-width="3" marker-end="url(#arrow-blue)" />
+          <line x1="340" y1="154" x2="1420" y2="150" stroke="#76c5ff" stroke-width="3" marker-end="url(#arrow-blue)" />
+
+          <line x1="560" y1="204" x2="245" y2="330" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+          <line x1="560" y1="204" x2="595" y2="330" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+          <line x1="560" y1="204" x2="975" y2="317" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+
+          <line x1="900" y1="204" x2="245" y2="330" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+          <line x1="900" y1="204" x2="595" y2="330" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+          <line x1="900" y1="204" x2="975" y2="317" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+
+          <line x1="1230" y1="204" x2="245" y2="330" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+          <line x1="1230" y1="204" x2="595" y2="330" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+          <line x1="1230" y1="204" x2="975" y2="317" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+
+          <line x1="975" y1="373" x2="1210" y2="373" stroke="#63e3dc" stroke-width="3" marker-end="url(#arrow-violet)" />
+          <line x1="1530" y1="373" x2="1150" y2="373" stroke="#63e3dc" stroke-width="2.5" marker-end="url(#arrow-violet)" />
+
+          <line x1="1570" y1="204" x2="1820" y2="304" stroke="#ff9d95" stroke-width="3" marker-end="url(#arrow-red)" />
+          <line x1="900" y1="204" x2="1820" y2="304" stroke="#ff9d95" stroke-width="3" marker-end="url(#arrow-red)" />
+          <line x1="1230" y1="204" x2="1820" y2="304" stroke="#ff9d95" stroke-width="3" marker-end="url(#arrow-red)" />
+          <line x1="560" y1="204" x2="1820" y2="304" stroke="#ffd179" stroke-width="3" stroke-dasharray="12 10" marker-end="url(#arrow-amber)" />
+          <text x="1310" y="236" fill="#ffd179" font-size="11">create reads preflight but does not block bundle generation</text>
+
+          <line x1="245" y1="416" x2="330" y2="610" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-green)" />
+          <line x1="595" y1="416" x2="330" y2="610" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-green)" />
+          <line x1="975" y1="429" x2="330" y2="610" stroke="#76c5ff" stroke-width="2.5" marker-end="url(#arrow-green)" />
+
+          <line x1="540" y1="685" x2="610" y2="685" stroke="#77e0aa" stroke-width="3" marker-end="url(#arrow-green)" />
+          <line x1="540" y1="640" x2="1030" y2="640" stroke="#77e0aa" stroke-width="2.5" marker-end="url(#arrow-green)" />
+          <line x1="540" y1="700" x2="1030" y2="760" stroke="#77e0aa" stroke-width="2.5" marker-end="url(#arrow-green)" />
+          <line x1="540" y1="730" x2="1700" y2="700" stroke="#77e0aa" stroke-width="2.5" marker-end="url(#arrow-green)" />
+
+          <line x1="970" y1="685" x2="800" y2="930" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="970" y1="685" x2="1210" y2="930" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="330" y1="760" x2="250" y2="946" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="330" y1="760" x2="600" y2="946" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="1170" y1="692" x2="1170" y2="720" stroke="#77e0aa" stroke-width="3" marker-end="url(#arrow-green)" />
+          <line x1="1170" y1="812" x2="250" y2="946" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="1500" y1="812" x2="250" y2="946" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="1850" y1="812" x2="250" y2="946" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="980" y1="1074" x2="1370" y2="930" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="1160" y1="1002" x2="1580" y2="1002" stroke="#ffd179" stroke-width="3" marker-end="url(#arrow-amber)" />
+          <line x1="1530" y1="1002" x2="1880" y2="1002" stroke="#bda8ff" stroke-width="3" marker-end="url(#arrow-violet)" />
+        </svg>
+      </section>
+
+      <section class="card span-4">
+        <h2>Legend</h2>
+        <div class="legend">
+          <div class="legend-row"><span class="swatch" style="background:#24405f"></span>Executable CLI/workflow entry surface</div>
+          <div class="legend-row"><span class="swatch" style="background:#31506d"></span>Shared contract resolution in <code>gg-core</code></div>
+          <div class="legend-row"><span class="swatch" style="background:#4f3c37"></span>Deterministic runtime gate / fail-fast preflight</div>
+          <div class="legend-row"><span class="swatch" style="background:#295744"></span>Execution adapter or engine</div>
+          <div class="legend-row"><span class="swatch" style="background:#5a4b2d"></span>Generated artifact or output package</div>
+          <div class="legend-row"><span class="swatch" style="background:#4a3c66"></span>Downstream installation target</div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>New Headless Systems</h2>
+        <div class="list">
+          <div class="item">
+            <strong>Executable `create` surface</strong>
+            Takes prompt, PRD path, or canonical spec and emits a deterministic application bundle with manifest and README.
+          </div>
+          <div class="item">
+            <strong>Shared `product-builder.ts`</strong>
+            First real bundle generator in the repo. Produces supported starter bundles for the mandatory V1 lanes.
+          </div>
+          <div class="item">
+            <strong>Shared `product-spec.ts`</strong>
+            Canonical spec normalization now lives in core instead of inside the CLI file.
+          </div>
+          <div class="item">
+            <strong>Shared `preflight.ts`</strong>
+            Runtime activation, parity, and project-context checks now have one reusable contract.
+          </div>
+          <div class="item">
+            <strong>Executable `agentic-status`</strong>
+            Reports live activation, parity, recent runs, control-plane state, and overall repo readiness.
+          </div>
+          <div class="item">
+            <strong>Portable bundle proof</strong>
+            Live bundle exists at <code>.agent/product-bundles/live-marketing-bundle/</code>.
+          </div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Why This Matters</h2>
+        <div class="list">
+          <div class="item">
+            <strong>Headless by default</strong>
+            The harness can now emit a concrete product package without requiring an IDE panel or conversational babysitting.
+          </div>
+          <div class="item">
+            <strong>Deterministic ownership preserved</strong>
+            `go`, `minion`, and `agentic-status` still fail fast when the runtime is not in a trusted runnable state.
+          </div>
+          <div class="item">
+            <strong>Downstream install stays separate</strong>
+            The harness is proved in its own repo first, then bundles can be installed into `GGV3`.
+          </div>
+          <div class="item">
+            <strong>Supports enterprise framing</strong>
+            Lanes, packs, gates, constraints, and integration requirements are all visible in the bundle manifest rather than hidden in prose.
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

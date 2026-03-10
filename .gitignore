@@ -4,6 +4,8 @@ node_modules/
 .dist/
 .agent/runs/
 .agent/control-plane/
+.agent/benchmarks/
+.agent/product-bundles/
 docs/reports/*
 !docs/reports/.gitkeep
 **/__pycache__/

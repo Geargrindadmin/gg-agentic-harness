@@ -1,0 +1,40 @@
+{
+  "id": "saas-dashboard",
+  "name": "SaaS Dashboard",
+  "description": "Authenticated enterprise SaaS application shell with dashboard, settings, and operational views.",
+  "v1Mandatory": true,
+  "category": "web-app",
+  "allowedStacks": [
+    "nextjs-app-router",
+    "vite-react-node"
+  ],
+  "defaultStack": "nextjs-app-router",
+  "requiredCapabilities": [
+    "authenticated-shell",
+    "navigation-system",
+    "typed-api-layer",
+    "loading-empty-error-states",
+    "operator-friendly-ia"
+  ],
+  "defaultPacks": [
+    "design-system",
+    "observability",
+    "auth-rbac"
+  ],
+  "allowedPacks": [
+    "design-system",
+    "observability",
+    "auth-rbac",
+    "billing-stripe",
+    "notifications",
+    "compliance-baseline"
+  ],
+  "requiredGates": [
+    "typecheck",
+    "lint",
+    "targeted-tests",
+    "docs-bundle",
+    "ui-smoke",
+    "api-contract-smoke"
+  ]
+}

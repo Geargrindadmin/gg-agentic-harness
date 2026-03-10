@@ -192,9 +192,168 @@ struct DispatchRequest: Codable {
     let bridgeStrategy: String?
     let bridgeRoles: [String]?
     let bridgeTimeoutSeconds: Int?
+    let harnessSettings: HarnessSettingsModel?
 }
 
 // MARK: - Integration control surface models
+
+struct HarnessSettingsModel: Codable, Equatable {
+    struct Diagram: Codable, Equatable {
+        var autoRefreshSeconds: Int
+        var primaryArtifact: String
+    }
+
+    struct Execution: Codable, Equatable {
+        var loopBudget: Int
+        var retryLimit: Int
+        var retryBackoffSeconds: [Int]
+        var promptImproverMode: String
+        var contextSource: String
+        var hydraMode: String
+        var validateMode: String
+        var docSyncMode: String
+    }
+
+    struct Governor: Codable, Equatable {
+        var cpuHighPct: Double?
+        var cpuLowPct: Double?
+        var modelVramGb: Double?
+        var perAgentOverheadGb: Double?
+        var reservedRamGb: Double?
+    }
+
+    struct Artifacts: Codable, Equatable {
+        var promptVersion: String?
+        var workflowVersion: String?
+        var blueprintVersion: String?
+        var toolBundle: String?
+        var riskTier: String?
+    }
+
+    var diagram: Diagram
+    var execution: Execution
+    var governor: Governor
+    var artifacts: Artifacts
+
+    static let defaults = HarnessSettingsModel(
+        diagram: .init(autoRefreshSeconds: 15, primaryArtifact: "docs/architecture/agentic-harness-dynamic-user-diagram.html"),
+        execution: .init(
+            loopBudget: 50,
+            retryLimit: 3,
+            retryBackoffSeconds: [1, 2, 4],
+            promptImproverMode: "auto",
+            contextSource: "standard",
+            hydraMode: "off",
+            validateMode: "none",
+            docSyncMode: "auto"
+        ),
+        governor: .init(cpuHighPct: nil, cpuLowPct: nil, modelVramGb: nil, perAgentOverheadGb: nil, reservedRamGb: nil),
+        artifacts: .init(promptVersion: nil, workflowVersion: nil, blueprintVersion: nil, toolBundle: nil, riskTier: nil)
+    )
+}
+
+struct HarnessDiagramModel: Codable, Equatable {
+    struct DiagramInfo: Codable, Equatable {
+        let title: String
+        let artifactPath: String
+        let artifactRelativePath: String
+        let autoRefreshSeconds: Int
+    }
+
+    struct LiveStatus: Codable, Equatable {
+        struct RuntimeInfo: Codable, Equatable {
+            let available: Bool
+            let path: String?
+            let runningAcp: Int?
+        }
+
+        struct Pool: Codable, Equatable {
+            let total: Int
+            let active: Int
+            let idle: Int
+        }
+
+        struct Runs: Codable, Equatable {
+            let total: Int
+            let running: Int
+        }
+
+        let codex: RuntimeInfo
+        let kimi: RuntimeInfo
+        let claude: RuntimeInfo
+        let pool: Pool
+        let runs: Runs
+        let governor: GovernorStatus
+        let uptime: Double
+    }
+
+    struct RuntimeCoordinatorSelection: Codable, Equatable {
+        let selected: String
+        let reason: String
+        let requested: String?
+    }
+
+    struct RuntimeDiscovery: Codable, Equatable {
+        let runtime: String
+        let label: String?
+        let binaryPath: String?
+        let authenticated: Bool
+        let localCliAuth: Bool
+        let directApiAvailable: Bool
+        let preferredTransport: String?
+        let summary: String
+    }
+
+    struct LiveActivity: Codable, Equatable {
+        let totalRuns: Int
+        let runningRuns: Int
+        let completedRuns: Int
+        let failedRuns: Int
+        let activeWorkers: Int
+        let pendingMessages: Int
+        let latestRunId: String?
+        let latestTask: String?
+        let latestStatus: String?
+        let latestUpdatedAt: String?
+    }
+
+    struct BreakdownEntry: Codable, Equatable, Identifiable {
+        var id: String { key }
+        let key: String
+        let label: String
+        let count: Int
+    }
+
+    struct RecentRun: Codable, Equatable, Identifiable {
+        var id: String { runId }
+        let runId: String
+        let task: String
+        let status: String
+        let coordinator: String?
+        let workerBackend: String?
+        let updatedAt: String
+    }
+
+    struct Live: Codable, Equatable {
+        struct RuntimeDiscoveryPayload: Codable, Equatable {
+            let coordinatorSelection: RuntimeCoordinatorSelection
+            let discoveries: [RuntimeDiscovery]
+        }
+
+        let status: LiveStatus
+        let runtimeDiscovery: RuntimeDiscoveryPayload
+        let activity: LiveActivity
+        let workersByRole: [BreakdownEntry]
+        let workersByRuntime: [BreakdownEntry]
+        let recentRuns: [RecentRun]
+    }
+
+    let generatedAt: String
+    let projectRoot: String
+    let diagram: DiagramInfo
+    let settings: HarnessSettingsModel
+    let live: Live
+}
 
 struct IntegrationSettingsModel: Codable {
     struct LiteLLM: Codable {
@@ -311,7 +470,7 @@ struct AgentStatus: Codable {
     let uptime: Double
 }
 
-struct GovernorStatus: Codable {
+struct GovernorStatus: Codable, Equatable {
     let timestamp: String
     let totalRamGb: Double
     let freeRamGb: Double

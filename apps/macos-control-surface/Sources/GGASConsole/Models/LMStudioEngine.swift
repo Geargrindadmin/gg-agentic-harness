@@ -73,6 +73,11 @@ final class LMStudioEngine {
     private init() {}
 
     private let defaultEndpoint = "http://localhost:1234"
+    private let modelIdentifierPathAllowed: CharacterSet = {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        return allowed
+    }()
     private var triedLaunchingApp = false
 
     private var systemPrompt: String {
@@ -168,20 +173,7 @@ final class LMStudioEngine {
 
         // 1️⃣  Try the full library endpoint (LLM Studio ≥ 0.3)
         if let libraryModels = await fetchLibraryModels(base: base), !libraryModels.isEmpty {
-            let loadedIds = Set((await fetchLoadedModels(base: base)).map(\.id))
-            if loadedIds.isEmpty { return libraryModels }
-            return libraryModels.map { model in
-                if loadedIds.contains(model.id) {
-                    return LMStudioModel(
-                        id: model.id,
-                        type: model.type,
-                        publisher: model.publisher,
-                        contextLength: model.contextLength,
-                        state: "loaded"
-                    )
-                }
-                return model
-            }
+            return libraryModels
         }
 
         // 2️⃣  Fall back to CLI-backed library and loaded-state detection.
@@ -210,6 +202,9 @@ final class LMStudioEngine {
     /// IDs of models currently loaded in VRAM (active in the OpenAI-compat API).
     func loadedModelIds(endpoint: String) async -> Set<String> {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
+        if let libraryModels = await fetchLibraryModels(base: base), !libraryModels.isEmpty {
+            return Set(libraryModels.filter(\.isLoaded).map(\.id))
+        }
         let models = await fetchLoadedModels(base: base)
         if !models.isEmpty {
             return Set(models.map(\.id))
@@ -247,7 +242,7 @@ final class LMStudioEngine {
     /// Uses `POST /api/v0/models/{encoded-id}/load`
     func loadModel(id: String, endpoint: String) async throws {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: modelIdentifierPathAllowed) ?? id
         guard let url = URL(string: "\(base)/api/v0/models/\(encoded)/load") else {
             throw URLError(.badURL)
         }
@@ -274,34 +269,40 @@ final class LMStudioEngine {
     /// Uses `POST /api/v0/models/{encoded-id}/unload`
     func unloadModel(id: String, endpoint: String) async throws {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: "\(base)/api/v0/models/\(encoded)/unload") else {
-            throw URLError(.badURL)
+        let loadedIds = await loadedModelIds(endpoint: endpoint)
+        if loadedIds.isEmpty {
+            throw LMAPIError.httpError(0, "unload \(id) — no loaded models reported by LLM Studio")
         }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = "{}".data(using: .utf8)
-        req.timeoutInterval = 15
+        let candidates = Self.unloadIdentifierCandidates(for: id, loadedIds: loadedIds)
 
-        do {
-            let (_, resp) = try await URLSession.shared.data(for: req)
-            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<300).contains(status) else {
-                throw LMAPIError.httpError(status, "unload \(id)")
+        var failures: [String] = []
+        for candidate in candidates {
+            do {
+                try await unloadModelAttempt(id: candidate, base: base)
+                return
+            } catch {
+                failures.append(error.localizedDescription)
             }
-            return
-        } catch {
-            // Older LM Studio builds can require CLI unload semantics.
-            try await LMStudioCLI.shared.unload(model: id)
         }
+
+        if loadedIds.count == 1, let onlyLoaded = loadedIds.first {
+            do {
+                try await unloadModelAttempt(id: onlyLoaded, base: base)
+                return
+            } catch {
+                failures.append(error.localizedDescription)
+            }
+        }
+
+        throw LMAPIError.httpError(
+            0,
+            failures.isEmpty ? "unload \(id)" : failures.joined(separator: " | ")
+        )
     }
 
     /// Returns the IDs of models currently loaded in VRAM.
     func listLoadedIds(endpoint: String) async -> [String] {
-        await fetchLoadedModels(base:
-            endpoint.isEmpty ? "http://localhost:1234" : endpoint
-        ).map(\.id)
+        Array(await loadedModelIds(endpoint: endpoint)).sorted()
     }
 
     // MARK: - Auto-start support
@@ -355,7 +356,7 @@ final class LMStudioEngine {
     /// Requires LLM Studio >= 0.3.6.
     func deleteModel(id: String, endpoint: String) async throws {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: modelIdentifierPathAllowed) ?? id
         guard let url = URL(string: "\(base)/api/v0/models/\(encoded)") else {
             throw URLError(.badURL)
         }
@@ -390,5 +391,61 @@ final class LMStudioEngine {
             }
             return nil
         }
+    }
+
+    private func unloadModelAttempt(id: String, base: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: modelIdentifierPathAllowed) ?? id
+        guard let url = URL(string: "\(base)/api/v0/models/\(encoded)/unload") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = "{}".data(using: .utf8)
+        req.timeoutInterval = 15
+
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status) else {
+                throw LMAPIError.httpError(status, "unload \(id)")
+            }
+            return
+        } catch {
+            try await LMStudioCLI.shared.unload(model: id)
+        }
+    }
+
+    static func unloadIdentifierCandidates(for modelId: String, loadedIds: Set<String>) -> [String] {
+        let normalizedTarget = normalizeUnloadMatchKey(modelId)
+        var ordered: [String] = []
+        var seen = Set<String>()
+
+        func append(_ candidate: String) {
+            guard !candidate.isEmpty else { return }
+            guard seen.insert(candidate).inserted else { return }
+            ordered.append(candidate)
+        }
+
+        let matches = loadedIds.filter { normalizeUnloadMatchKey($0) == normalizedTarget }
+        for match in matches.sorted() {
+            append(match)
+        }
+
+        append(modelId)
+        append(normalizedTarget)
+        if let last = modelId.split(separator: "/").last.map(String.init) {
+            append(last)
+            append(last.replacingOccurrences(of: ".gguf", with: ""))
+        }
+
+        return ordered
+    }
+
+    private static func normalizeUnloadMatchKey(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: ".gguf", with: "")
     }
 }

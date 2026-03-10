@@ -101,4 +101,22 @@ struct A2AClientTests {
             #expect(freeModels.providers.first?.models.first?.label == "Qwen 2.5 Coder 32B Instruct")
         }
     }
+
+    @Test
+    func harnessSettingsAndDiagramDecodeHeadlessControlPlanePayloads() async throws {
+        try await withFixtureSession {
+            FixtureURLProtocol.handlers["/api/harness/settings"] = (200, FixtureControlPlaneData.harnessSettings)
+            FixtureURLProtocol.handlers["/api/harness/diagram"] = (200, FixtureControlPlaneData.harnessDiagram)
+
+            let settings = try await A2AClient.shared.fetchHarnessSettings()
+            let diagram = try await A2AClient.shared.fetchHarnessDiagram()
+
+            #expect(settings.execution.loopBudget == 28)
+            #expect(settings.execution.promptImproverMode == "force")
+            #expect(settings.governor.cpuHighPct == 90)
+            #expect(diagram.diagram.artifactRelativePath == "docs/architecture/agentic-harness-dynamic-user-diagram.html")
+            #expect(diagram.live.activity.runningRuns == 2)
+            #expect(diagram.live.status.governor.allowedAgents == 6)
+        }
+    }
 }

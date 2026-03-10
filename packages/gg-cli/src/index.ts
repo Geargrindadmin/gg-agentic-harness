@@ -1,15 +1,25 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import net from 'node:net';
 import { spawnSync } from 'node:child_process';
 import {
+  buildCanonicalProductSpec,
+  createProductBundle,
+  getHarnessExecutionPreflight,
+  harnessSettingsPath,
   getHarnessPaths,
   loadSkills,
   loadWorkflows,
+  readHarnessSettings,
   readCatalogEntryContent,
   readJsonFile,
+  resetHarnessSettings,
+  resolveGoSourceInput,
   resolveProjectRoot,
+  resolveHarnessDiagramPath,
   searchCatalog,
+  writeHarnessSettings,
   type CatalogEntry
 } from '../../gg-core/dist/index.js';
 import {
@@ -62,6 +72,7 @@ type CodeGraphContextMode = 'off' | 'prefer' | 'hybrid' | 'required';
 type PromptImproverMode = 'off' | 'auto' | 'force';
 type HydraMode = 'off' | 'shadow' | 'active';
 type HydraRoute = 'native' | 'single' | 'tandem' | 'council';
+type ProductResolution = ReturnType<typeof buildCanonicalProductSpec>;
 
 interface CommandTrace {
   command: string;
@@ -135,6 +146,29 @@ interface VisualExplainerMetrics {
   eventsCount: number;
 }
 
+const BUILDER_ROUTABLE_LANES = new Set(['marketing-site', 'saas-dashboard', 'admin-panel']);
+
+function isBuilderEligible(productResolution: ProductResolution): boolean {
+  return BUILDER_ROUTABLE_LANES.has(productResolution.lane.id) &&
+    productResolution.unsupportedRequestedPackIds.length === 0;
+}
+
+function buildBuilderRouteFlags(flags: Record<string, FlagValue>, runId: string): Record<string, FlagValue> {
+  return {
+    ...flags,
+    'output-dir': path.join('.agent', 'product-bundles', runId)
+  };
+}
+
+function routeSupportedProductToBuilder(
+  projectRoot: string,
+  request: string,
+  flags: Record<string, FlagValue>,
+  runId: string
+): CommandResult {
+  return runCreateWorkflow(projectRoot, request, buildBuilderRouteFlags(flags, runId), true);
+}
+
 interface VisualExplainerArtifact {
   mode: string;
   subject: string;
@@ -149,10 +183,160 @@ interface VisualExplainerArtifact {
   metrics: VisualExplainerMetrics;
 }
 
+interface AgenticStatusCheck {
+  id: string;
+  status: 'pass' | 'warn' | 'fail';
+  summary: string;
+  detail: string;
+  source: 'doctor' | 'repo' | 'catalog' | 'control-plane' | 'runtime' | 'context';
+}
+
+interface AgenticStatusRecentRun {
+  runId: string;
+  workflow: string;
+  status: string;
+  createdAt: string;
+  filePath: string;
+}
+
+interface AgenticStatusPayload {
+  runId: string;
+  generatedAt: string;
+  overall: 'healthy' | 'attention' | 'degraded';
+  summary: {
+    failingChecks: number;
+    warningChecks: number;
+    dirtyFiles: number;
+    recentRuns: number;
+  };
+  repo: {
+    projectRoot: string;
+    branch: string;
+    dirty: boolean;
+    changedFiles: string[];
+    worktrees: string[];
+  };
+  catalogs: {
+    skillsCount: number;
+    workflowsCount: number;
+    agentsCount: number;
+    packsCount: number;
+    productLanesCount: number;
+    schemasCount: number;
+  };
+  controlPlane: {
+    runsCount: number;
+    worktreesCount: number;
+    executionsCount: number;
+    serverFilesCount: number;
+  };
+  runtime: {
+    activation: {
+      active: boolean;
+      activationType: string | null;
+      checks: AgenticStatusCheck[];
+    };
+    parity: {
+      ok: boolean;
+      strict: boolean;
+      checks: AgenticStatusCheck[];
+    };
+    context: {
+      status: 'current' | 'stale' | 'missing';
+      detail: string;
+    };
+  };
+  recentRuns: AgenticStatusRecentRun[];
+  checks: AgenticStatusCheck[];
+  runArtifact: string;
+}
+
+interface ProductLaneDefinition {
+  id: string;
+  name: string;
+  description: string;
+  v1Mandatory: boolean;
+  category: string;
+  allowedStacks: string[];
+  defaultStack: string;
+  requiredCapabilities: string[];
+  defaultPacks: string[];
+  allowedPacks: string[];
+  requiredGates: string[];
+}
+
+interface ProductPackDefinition {
+  id: string;
+  name: string;
+  description: string;
+  v1Unattended: boolean;
+  riskTier: 'low' | 'medium' | 'high';
+  compatibleLanes: string[];
+  requiredConfig: string[];
+  addsCapabilities: string[];
+  requiredGates: string[];
+  reviewRequired: boolean;
+}
+
+type CanonicalProductSourceType = 'prompt' | 'prd' | 'prompt+constraints' | 'normalized';
+type DeliveryTarget = 'local-repo' | 'portable-target' | 'downstream-install';
+
+interface CanonicalProductSpec {
+  schemaVersion: 1;
+  sourceType: CanonicalProductSourceType;
+  sourcePath?: string;
+  summary: string;
+  lane: string;
+  laneConfidence: number;
+  targetStack: string;
+  riskTier: 'low' | 'medium' | 'high';
+  enterprisePacks: string[];
+  constraints: string[];
+  requiredIntegrations: string[];
+  acceptanceCriteria: string[];
+  validationProfile: string;
+  deliveryTarget: DeliveryTarget;
+  downstreamTarget?: string;
+  requiresHumanReview: boolean;
+}
+
+interface GoSourceInput {
+  sourceType: CanonicalProductSourceType;
+  rawInput: string;
+  sourceText: string;
+  sourcePath?: string;
+  normalizedSpec?: Partial<CanonicalProductSpec>;
+}
+
+interface GoProductResolution {
+  canonicalSpec: CanonicalProductSpec;
+  lane: ProductLaneDefinition;
+  laneConfidence: number;
+  laneEvidence: string[];
+  selectedPacks: ProductPackDefinition[];
+  requestedPackIds: string[];
+  unsupportedRequestedPackIds: string[];
+  missingConfig: string[];
+  reviewReasons: string[];
+}
+
 const PORTABLE_DOC_FILES = [
   'docs/agentic-harness.md',
   'docs/memory.md',
-  'docs/runtime-profiles.md'
+  'docs/runtime-profiles.md',
+  'docs/setup/portable-agentic-harness-setup.md',
+  'docs/architecture/agentic-harness-dynamic-user-diagram.html'
+];
+
+const PORTABLE_AGENT_PATHS = [
+  '.agent/agents',
+  '.agent/policies',
+  '.agent/registry',
+  '.agent/rules',
+  '.agent/schemas',
+  '.agent/skills',
+  '.agent/templates',
+  '.agent/workflows'
 ];
 
 const PORTABLE_REQUIRED_PACKAGE_SCRIPTS: Record<string, string> = {
@@ -201,6 +385,9 @@ Usage:
   gg [--json] [--project-root <path>] codex <activate|status> [targetDir] [--codex-home <path>]
   gg [--json] [--project-root <path>] context <check|refresh>
   gg [--json] [--project-root <path>] validate <tsc|lint|test|all>
+  gg [--json] [--project-root <path>] harness settings <get|set|reset> [--key <dot.path> --value <value>]
+  gg [--json] [--project-root <path>] harness diagram [--format json|html]
+  gg [--json] [--project-root <path>] harness ui <snapshot|command|batch> [options]
   gg [--json] [--project-root <path>] obsidian <doctor|bootstrap|model-log>
   gg [--json] [--project-root <path>] portable init <targetDir> [--mode symlink|copy]
   gg [--json] [--project-root <path>] portable verify <targetDir> [--runtime structure|smoke]
@@ -286,6 +473,24 @@ function intFlagAllowZero(flags: Record<string, FlagValue>, name: string, fallba
   return parsed;
 }
 
+function booleanFlag(flags: Record<string, FlagValue>, key: string, fallback = false): boolean {
+  const value = flags[key];
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return booleanFlag({ [key]: value[0] }, key, fallback);
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  throw new Error(`Invalid --${key} value: ${value}`);
+}
+
 function parseRuntimeId(value: string | undefined, fallback: RuntimeId = 'codex'): RuntimeId {
   const runtime = (value || fallback) as RuntimeId;
   if (runtime !== 'codex' && runtime !== 'claude' && runtime !== 'kimi') {
@@ -322,6 +527,10 @@ function parseLaunchTransport(
 
 function generateWorkerId(role: WorkerRole): string {
   return `${role}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function generateRunId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function ensureHarnessWorktree(projectRoot: string, runId: string, agentId: string): string {
@@ -501,6 +710,326 @@ function commandDoctor(projectRoot: string, jsonMode: boolean): CommandResult {
       skillsCount: skills.length,
       workflowsCount: workflows.length
     }
+  };
+}
+
+function countEntries(dirPath: string, predicate?: (entry: fs.Dirent) => boolean): number {
+  if (!fs.existsSync(dirPath)) {
+    return 0;
+  }
+
+  return fs.readdirSync(dirPath, { withFileTypes: true }).filter((entry) => (predicate ? predicate(entry) : true)).length;
+}
+
+function listGitWorktrees(projectRoot: string): string[] {
+  const result = executeCommand('git', ['worktree', 'list', '--porcelain'], projectRoot, true);
+  if (result.code !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('worktree '))
+    .map((line) => line.slice('worktree '.length).trim());
+}
+
+function summarizeRecentRuns(projectRoot: string, limit: number): AgenticStatusRecentRun[] {
+  return latestRunArtifactPaths(projectRoot, limit).map((filePath) => {
+    const parsed = readJsonFile<Record<string, unknown>>(filePath) || {};
+    const fileStats = fs.statSync(filePath);
+
+    const runId = typeof parsed.runId === 'string' ? parsed.runId : path.basename(filePath, '.json');
+    const workflow = typeof parsed.workflow === 'string'
+      ? parsed.workflow
+      : typeof parsed.slug === 'string'
+        ? parsed.slug
+        : typeof parsed.type === 'string'
+          ? parsed.type
+          : 'unknown';
+    const status = typeof parsed.status === 'string'
+      ? parsed.status
+      : typeof parsed.outcome === 'string'
+        ? parsed.outcome
+        : typeof parsed.mode === 'string'
+          ? parsed.mode
+          : 'unknown';
+    const createdAt = typeof parsed.createdAt === 'string'
+      ? parsed.createdAt
+      : typeof parsed.generatedAt === 'string'
+        ? parsed.generatedAt
+        : fileStats.mtime.toISOString();
+
+    return {
+      runId,
+      workflow,
+      status,
+      createdAt,
+      filePath: path.relative(projectRoot, filePath)
+    };
+  });
+}
+
+function buildAgenticStatus(projectRoot: string, flags: Record<string, FlagValue>): AgenticStatusPayload {
+  const paths = getHarnessPaths(projectRoot);
+  const generatedAt = isoNow();
+  const runId = generateRunId('agentic-status');
+  const runArtifact = path.join(paths.runArtifactDir, `${runId}.json`);
+  const recentRunsLimit = intFlagAllowZero(flags, 'limit', 5);
+
+  const doctorResult = commandDoctor(projectRoot, true).payload as
+    | {
+      checks?: Array<{ name?: string; ok?: boolean; detail?: string }>;
+      skillsCount?: number;
+      workflowsCount?: number;
+    }
+    | undefined;
+
+  const doctorChecks: AgenticStatusCheck[] = Array.isArray(doctorResult?.checks)
+    ? doctorResult.checks.map((check) => ({
+      id: slugify(String(check.name || 'doctor-check')) || 'doctor-check',
+      status: check.ok ? 'pass' : 'fail',
+      summary: String(check.name || 'doctor check'),
+      detail: String(check.detail || ''),
+      source: 'doctor'
+    }))
+    : [];
+
+  const changedFiles = parseGitStatusPaths(executeCommand('git', ['status', '--short'], projectRoot, true).stdout);
+  const branch = executeCommand('git', ['branch', '--show-current'], projectRoot, true).stdout.trim() || 'DETACHED';
+  const worktrees = listGitWorktrees(projectRoot);
+
+  const repoChecks: AgenticStatusCheck[] = [
+    {
+      id: 'git_worktree_clean',
+      status: changedFiles.length > 0 ? 'warn' : 'pass',
+      summary: changedFiles.length > 0 ? 'Working tree has local modifications' : 'Working tree is clean',
+      detail: changedFiles.length > 0 ? changedFiles.slice(0, 10).join(', ') : branch,
+      source: 'repo'
+    },
+    {
+      id: 'git_worktrees_available',
+      status: worktrees.length > 0 ? 'pass' : 'warn',
+      summary: worktrees.length > 0 ? 'Git worktrees are discoverable' : 'No git worktrees were discovered',
+      detail: worktrees.length > 0 ? `${worktrees.length} worktree(s)` : 'git worktree list returned no entries',
+      source: 'repo'
+    }
+  ];
+
+  const agentsDir = path.join(projectRoot, '.agent', 'agents');
+  const packsDir = path.join(projectRoot, '.agent', 'packs');
+  const productLanesDir = path.join(projectRoot, '.agent', 'product-lanes');
+  const schemasDir = path.join(projectRoot, '.agent', 'schemas');
+
+  const catalogs = {
+    skillsCount: typeof doctorResult?.skillsCount === 'number'
+      ? doctorResult.skillsCount
+      : countEntries(paths.skillsDir, (entry) => entry.isDirectory()),
+    workflowsCount: typeof doctorResult?.workflowsCount === 'number'
+      ? doctorResult.workflowsCount
+      : countEntries(paths.workflowsDir, (entry) => entry.isFile() && entry.name.endsWith('.md')),
+    agentsCount: countEntries(agentsDir, (entry) => entry.isFile() && entry.name.endsWith('.md')),
+    packsCount: countEntries(packsDir, (entry) => entry.isFile() && entry.name.endsWith('.json')),
+    productLanesCount: countEntries(productLanesDir, (entry) => entry.isFile() && entry.name.endsWith('.json')),
+    schemasCount: countEntries(schemasDir, (entry) => entry.isFile() && entry.name.endsWith('.json'))
+  };
+
+  const catalogChecks: AgenticStatusCheck[] = [
+    {
+      id: 'catalog_skills_present',
+      status: catalogs.skillsCount > 0 ? 'pass' : 'fail',
+      summary: catalogs.skillsCount > 0 ? 'Skills catalog is populated' : 'Skills catalog is empty',
+      detail: `${catalogs.skillsCount} skill directories`,
+      source: 'catalog'
+    },
+    {
+      id: 'catalog_workflows_present',
+      status: catalogs.workflowsCount > 0 ? 'pass' : 'fail',
+      summary: catalogs.workflowsCount > 0 ? 'Workflow catalog is populated' : 'Workflow catalog is empty',
+      detail: `${catalogs.workflowsCount} workflow files`,
+      source: 'catalog'
+    },
+    {
+      id: 'catalog_product_lanes_present',
+      status: catalogs.productLanesCount > 0 ? 'pass' : 'fail',
+      summary: catalogs.productLanesCount > 0 ? 'Product lane registry is populated' : 'Product lane registry is empty',
+      detail: `${catalogs.productLanesCount} product lane definitions`,
+      source: 'catalog'
+    },
+    {
+      id: 'catalog_packs_present',
+      status: catalogs.packsCount > 0 ? 'pass' : 'fail',
+      summary: catalogs.packsCount > 0 ? 'Enterprise pack registry is populated' : 'Enterprise pack registry is empty',
+      detail: `${catalogs.packsCount} pack definitions`,
+      source: 'catalog'
+    }
+  ];
+
+  const controlPlaneRoot = path.join(projectRoot, '.agent', 'control-plane');
+  const controlPlane = {
+    runsCount: countEntries(path.join(controlPlaneRoot, 'runs'), (entry) => entry.isFile() && entry.name.endsWith('.json')),
+    worktreesCount: countEntries(path.join(controlPlaneRoot, 'worktrees'), (entry) => entry.isDirectory()),
+    executionsCount: countEntries(path.join(controlPlaneRoot, 'executions'), (entry) => entry.isFile() || entry.isDirectory()),
+    serverFilesCount: countEntries(path.join(controlPlaneRoot, 'server'))
+  };
+
+  const controlPlaneChecks: AgenticStatusCheck[] = [
+    {
+      id: 'control_plane_root_present',
+      status: fs.existsSync(controlPlaneRoot) ? 'pass' : 'fail',
+      summary: fs.existsSync(controlPlaneRoot) ? 'Control-plane root is present' : 'Control-plane root is missing',
+      detail: controlPlaneRoot,
+      source: 'control-plane'
+    },
+    {
+      id: 'control_plane_runs_dir_present',
+      status: fs.existsSync(path.join(controlPlaneRoot, 'runs')) ? 'pass' : 'fail',
+      summary: fs.existsSync(path.join(controlPlaneRoot, 'runs'))
+        ? 'Control-plane run state directory is present'
+        : 'Control-plane run state directory is missing',
+      detail: path.join(controlPlaneRoot, 'runs'),
+      source: 'control-plane'
+    }
+  ];
+
+  const preflight = getHarnessExecutionPreflight(projectRoot, 'codex');
+  const activationChecks: AgenticStatusCheck[] = preflight.activation.checks.map((check) => ({
+    id: check.id,
+    status: check.ok ? 'pass' : 'fail',
+    summary: check.id,
+    detail: check.detail,
+    source: 'runtime'
+  }));
+
+  if (preflight.activation.parseError) {
+    activationChecks.unshift({
+      id: 'runtime_activation_payload',
+      status: 'fail',
+      summary: 'Runtime activation status could not be parsed',
+      detail: preflight.activation.parseError,
+      source: 'runtime'
+    });
+  }
+
+  const parityChecks: AgenticStatusCheck[] = preflight.parity.checks.map((check) => ({
+    id: check.id,
+    status: check.status,
+    summary: check.summary,
+    detail: check.detail,
+    source: 'runtime'
+  }));
+
+  if (preflight.parity.parseError) {
+    parityChecks.unshift({
+      id: 'runtime_parity_payload',
+      status: 'fail',
+      summary: 'Runtime parity status could not be parsed',
+      detail: preflight.parity.parseError,
+      source: 'runtime'
+    });
+  }
+
+  const contextChecks: AgenticStatusCheck[] = [
+    {
+      id: 'project_context_check',
+      status: preflight.context.status === 'current' ? 'pass' : 'fail',
+      summary: preflight.context.status === 'current'
+        ? 'Project context is current'
+        : preflight.context.status === 'stale'
+          ? 'Project context is stale'
+          : 'Project context generator is missing',
+      detail: preflight.context.detail,
+      source: 'context'
+    }
+  ];
+
+  const includeContextCheckInSummary = !parityChecks.some((check) => check.id === 'project_context');
+
+  const recentRuns = summarizeRecentRuns(projectRoot, recentRunsLimit);
+
+  const checks = [
+    ...doctorChecks,
+    ...repoChecks,
+    ...catalogChecks,
+    ...controlPlaneChecks,
+    ...activationChecks,
+    ...parityChecks,
+    ...(includeContextCheckInSummary ? contextChecks : [])
+  ];
+
+  const failingChecks = checks.filter((check) => check.status === 'fail').length;
+  const warningChecks = checks.filter((check) => check.status === 'warn').length;
+  const overall: AgenticStatusPayload['overall'] = failingChecks > 0
+    ? 'degraded'
+    : warningChecks > 0
+      ? 'attention'
+      : 'healthy';
+
+  const payload: AgenticStatusPayload = {
+    runId,
+    generatedAt,
+    overall,
+    summary: {
+      failingChecks,
+      warningChecks,
+      dirtyFiles: changedFiles.length,
+      recentRuns: recentRuns.length
+    },
+    repo: {
+      projectRoot,
+      branch,
+      dirty: changedFiles.length > 0,
+      changedFiles,
+      worktrees
+    },
+    catalogs,
+    controlPlane,
+    runtime: {
+      activation: {
+        active: preflight.activation.active,
+        activationType: preflight.activation.activationType,
+        checks: activationChecks
+      },
+      parity: {
+        ok: preflight.parity.ok,
+        strict: preflight.parity.strict,
+        checks: parityChecks
+      },
+      context: {
+        status: preflight.context.status,
+        detail: contextChecks[0].detail
+      }
+    },
+    recentRuns,
+    checks,
+    runArtifact
+  };
+
+  writeJson(runArtifact, payload);
+  return payload;
+}
+
+function runAgenticStatusWorkflow(
+  projectRoot: string,
+  _input: string,
+  flags: Record<string, FlagValue>,
+  jsonMode: boolean
+): CommandResult {
+  const payload = buildAgenticStatus(projectRoot, flags);
+
+  if (!jsonMode) {
+    console.log(`Agentic status: ${payload.overall}`);
+    console.log(`Failing checks: ${payload.summary.failingChecks}`);
+    console.log(`Warnings: ${payload.summary.warningChecks}`);
+    console.log(`Branch: ${payload.repo.branch}`);
+    console.log(`Dirty files: ${payload.summary.dirtyFiles}`);
+    console.log(`Recent runs: ${payload.summary.recentRuns}`);
+    console.log(`Run artifact: ${payload.runArtifact}`);
+  }
+
+  return {
+    code: payload.summary.failingChecks > 0 ? 1 : 0,
+    payload
   };
 }
 
@@ -1098,7 +1627,7 @@ function runPromptImprover(
   }
 
   const { mode, promptImprover, contextPilot } = createPromptImproverEnvelope(projectRoot, objective, flags, 'force');
-  const runId = `prompt-improver-${Date.now()}`;
+  const runId = generateRunId('prompt-improver');
   const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
   const reportPath = path.join(projectRoot, 'docs', 'reports', `${dateStamp()}-prompt-improver-${slugify(promptImprover.normalizedObjective) || 'objective'}.md`);
   const artifact = {
@@ -1263,6 +1792,10 @@ function runHydraSidecarDecision(
   };
 }
 
+function normalizeSearchText(input: string): string {
+  return input.toLowerCase().replace(/[_-]+/gu, ' ');
+}
+
 function buildPaperclipPlan(
   projectRoot: string,
   objective: string,
@@ -1287,7 +1820,7 @@ function buildPaperclipPlan(
   const workflows = loadWorkflows(projectRoot);
   const matchedSkills = searchCatalog(skills, normalizedObjective, 5);
   const matchedWorkflows = searchCatalog(workflows, normalizedObjective, 5);
-  const preferredOrder = ['go', 'minion', 'symphony-lite', 'paperclip-extracted', 'parallel-dispatcher', 'loop-planner', 'loop-executor'];
+  const preferredOrder = ['create', 'go', 'minion', 'symphony-lite', 'paperclip-extracted', 'parallel-dispatcher', 'loop-planner', 'loop-executor'];
   const hydraSidecar = runHydraSidecarDecision(normalizedObjective, flags, envelope.promptImprover, envelope.contextPilot);
   const preferred = matchedWorkflows.find((item) => preferredOrder.includes(item.slug));
   const primaryWorkflow =
@@ -1295,7 +1828,7 @@ function buildPaperclipPlan(
       ? hydraSidecar.delegatedWorkflow
       : preferred?.slug || 'go';
   const validators = ['npx tsc --noEmit', 'npm run lint', 'npm test', 'gg workflow run full-doc-update "<task summary>"'];
-  const runId = `paperclip-${Date.now()}`;
+  const runId = generateRunId('paperclip');
   const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
   const reportPath = path.join(projectRoot, 'docs', 'reports', `${dateStamp()}-paperclip-${slugify(normalizedObjective) || 'objective'}.md`);
 
@@ -1425,30 +1958,191 @@ function runGoWorkflow(
     throw new Error('go requires a goal string');
   }
 
-  const promptEnvelope = createPromptImproverEnvelope(projectRoot, goal, flags);
-  const plan = buildPaperclipPlan(projectRoot, promptEnvelope.promptImprover.normalizedObjective, flags, promptEnvelope);
-  const runId = `go-${Date.now()}`;
+  const source = resolveGoSourceInput(projectRoot, goal, flags);
+  const promptEnvelope = createPromptImproverEnvelope(projectRoot, source.sourceText, flags);
+  const productResolution = buildCanonicalProductSpec(projectRoot, source, promptEnvelope.promptImprover, flags);
+  const preflight = getHarnessExecutionPreflight(projectRoot, 'codex');
+  const runId = generateRunId('go');
   const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
-  const artifact = {
+  const specPath = path.join(projectRoot, '.agent', 'runs', `${runId}.spec.json`);
+  const baseArtifact = {
     schemaVersion: 1,
     runId,
     workflow: 'go',
     goal,
+    sourceType: source.sourceType,
+    sourcePath: source.sourcePath,
     normalizedGoal: promptEnvelope.promptImprover.normalizedObjective,
     promptImproverMode: promptEnvelope.mode,
     promptImprover: promptEnvelope.promptImprover,
     contextPilot: promptEnvelope.contextPilot,
-    routedWorkflow: plan.primaryWorkflow,
-    downstreamRunArtifact: path.relative(projectRoot, plan.runPath),
+    canonicalSpecPath: path.relative(projectRoot, specPath),
+    canonicalSpec: productResolution.canonicalSpec,
+    laneSelection: {
+      laneId: productResolution.lane.id,
+      confidence: productResolution.laneConfidence,
+      evidence: productResolution.laneEvidence
+    },
+    packSelection: {
+      selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+      requestedPackIds: productResolution.requestedPackIds,
+      unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+      missingConfig: productResolution.missingConfig,
+      reviewReasons: productResolution.reviewReasons
+    },
+    preflight,
     createdAt: isoNow()
   };
 
-  writeJson(runPath, artifact);
+  writeJson(specPath, productResolution.canonicalSpec);
+
+  if (!preflight.isRunnable) {
+    writeJson(runPath, {
+      ...baseArtifact,
+      status: 'BLOCKED',
+      blockingIssues: preflight.blockingIssues
+    });
+
+    return {
+      code: 1,
+      payload: {
+        runId,
+        outcome: 'BLOCKED',
+        sourceType: source.sourceType,
+        sourcePath: source.sourcePath,
+        normalizedGoal: promptEnvelope.promptImprover.normalizedObjective,
+        canonicalSpec: productResolution.canonicalSpec,
+        laneSelection: {
+          laneId: productResolution.lane.id,
+          confidence: productResolution.laneConfidence,
+          evidence: productResolution.laneEvidence
+        },
+        packSelection: {
+          selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+          requestedPackIds: productResolution.requestedPackIds,
+          unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+          missingConfig: productResolution.missingConfig,
+          reviewReasons: productResolution.reviewReasons
+        },
+        preflight,
+        blockingIssues: preflight.blockingIssues,
+        runArtifact: runPath,
+        specArtifact: specPath,
+        promptImprover: promptEnvelope.promptImprover,
+        contextPilot: promptEnvelope.contextPilot
+      }
+    };
+  }
+
+  if (isBuilderEligible(productResolution)) {
+    const builderResult = routeSupportedProductToBuilder(projectRoot, goal, flags, runId);
+    const builderPayload = (builderResult.payload || {}) as {
+      outcome?: string;
+      runArtifact?: string;
+      specArtifact?: string;
+      bundleDir?: string;
+      bundleManifest?: string;
+      generatedFiles?: string[];
+      preflightWarnings?: string[];
+    };
+    const outcome = builderPayload.outcome || (builderResult.code === 0 ? 'HANDOFF_READY' : 'FAILED');
+
+    writeJson(runPath, {
+      ...baseArtifact,
+      status: outcome,
+      routedWorkflow: 'create',
+      resolvedExecutionPath: 'builder',
+      builderEligible: true,
+      builderInvoked: true,
+      downstreamRunArtifact: builderPayload.runArtifact
+        ? path.relative(projectRoot, builderPayload.runArtifact)
+        : undefined,
+      downstreamSpecArtifact: builderPayload.specArtifact
+        ? path.relative(projectRoot, builderPayload.specArtifact)
+        : undefined,
+      bundleDir: typeof builderPayload.bundleDir === 'string'
+        ? path.relative(projectRoot, builderPayload.bundleDir)
+        : undefined,
+      bundleManifestPath: typeof builderPayload.bundleManifest === 'string'
+        ? path.relative(projectRoot, builderPayload.bundleManifest)
+        : undefined,
+      generatedFiles: Array.isArray(builderPayload.generatedFiles) ? builderPayload.generatedFiles : undefined,
+      preflightWarnings: Array.isArray(builderPayload.preflightWarnings) ? builderPayload.preflightWarnings : []
+    });
+
+    if (!jsonMode) {
+      console.log(`Go intake routed: ${runId}`);
+      console.log(`Normalized goal: ${promptEnvelope.promptImprover.normalizedObjective}`);
+      console.log(`Product lane: ${productResolution.canonicalSpec.lane} (${productResolution.canonicalSpec.laneConfidence})`);
+      console.log(`Target stack: ${productResolution.canonicalSpec.targetStack}`);
+      console.log(`Enterprise packs: ${productResolution.canonicalSpec.enterprisePacks.join(', ') || 'none'}`);
+      console.log('Routed workflow: create');
+      if (typeof builderPayload.bundleDir === 'string') {
+        console.log(`Bundle directory: ${builderPayload.bundleDir}`);
+      }
+      console.log(`Canonical spec: ${specPath}`);
+      console.log(`Run artifact: ${runPath}`);
+    }
+
+    return {
+      code: builderResult.code,
+      payload: {
+        runId,
+        outcome,
+        sourceType: source.sourceType,
+        sourcePath: source.sourcePath,
+        normalizedGoal: promptEnvelope.promptImprover.normalizedObjective,
+        canonicalSpec: productResolution.canonicalSpec,
+        laneSelection: {
+          laneId: productResolution.lane.id,
+          confidence: productResolution.laneConfidence,
+          evidence: productResolution.laneEvidence
+        },
+        packSelection: {
+          selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+          requestedPackIds: productResolution.requestedPackIds,
+          unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+          missingConfig: productResolution.missingConfig,
+          reviewReasons: productResolution.reviewReasons
+        },
+        routedWorkflow: 'create',
+        resolvedExecutionPath: 'builder',
+        builderEligible: true,
+        builderInvoked: true,
+        bundleDir: builderPayload.bundleDir,
+        bundleManifest: builderPayload.bundleManifest,
+        generatedFiles: builderPayload.generatedFiles,
+        runArtifact: runPath,
+        specArtifact: specPath,
+        downstreamRunArtifact: builderPayload.runArtifact,
+        downstreamSpecArtifact: builderPayload.specArtifact,
+        preflight,
+        preflightWarnings: builderPayload.preflightWarnings || [],
+        promptImprover: promptEnvelope.promptImprover,
+        contextPilot: promptEnvelope.contextPilot
+      }
+    };
+  }
+
+  const plan = buildPaperclipPlan(projectRoot, promptEnvelope.promptImprover.normalizedObjective, flags, promptEnvelope);
+  writeJson(runPath, {
+    ...baseArtifact,
+    status: 'PLANNED',
+    routedWorkflow: plan.primaryWorkflow,
+    resolvedExecutionPath: 'planner',
+    builderEligible: false,
+    builderInvoked: false,
+    downstreamRunArtifact: path.relative(projectRoot, plan.runPath)
+  });
 
   if (!jsonMode) {
     console.log(`Go intake routed: ${runId}`);
     console.log(`Normalized goal: ${promptEnvelope.promptImprover.normalizedObjective}`);
+    console.log(`Product lane: ${productResolution.canonicalSpec.lane} (${productResolution.canonicalSpec.laneConfidence})`);
+    console.log(`Target stack: ${productResolution.canonicalSpec.targetStack}`);
+    console.log(`Enterprise packs: ${productResolution.canonicalSpec.enterprisePacks.join(', ') || 'none'}`);
     console.log(`Routed workflow: ${plan.primaryWorkflow}`);
+    console.log(`Canonical spec: ${specPath}`);
     console.log(`Run artifact: ${runPath}`);
   }
 
@@ -1456,13 +2150,498 @@ function runGoWorkflow(
     code: 0,
     payload: {
       runId,
+      sourceType: source.sourceType,
+      sourcePath: source.sourcePath,
       normalizedGoal: promptEnvelope.promptImprover.normalizedObjective,
+      canonicalSpec: productResolution.canonicalSpec,
+      laneSelection: {
+        laneId: productResolution.lane.id,
+        confidence: productResolution.laneConfidence,
+        evidence: productResolution.laneEvidence
+      },
+      packSelection: {
+        selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+        requestedPackIds: productResolution.requestedPackIds,
+        unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+        missingConfig: productResolution.missingConfig,
+        reviewReasons: productResolution.reviewReasons
+      },
       routedWorkflow: plan.primaryWorkflow,
+      resolvedExecutionPath: 'planner',
+      builderEligible: false,
+      builderInvoked: false,
       runArtifact: runPath,
+      specArtifact: specPath,
       downstreamRunArtifact: plan.runPath,
+      preflight,
       promptImprover: promptEnvelope.promptImprover,
       contextPilot: promptEnvelope.contextPilot,
       hydraSidecar: plan.hydraSidecar
+    }
+  };
+}
+
+function runCreateWorkflow(
+  projectRoot: string,
+  request: string,
+  flags: Record<string, FlagValue>,
+  jsonMode: boolean
+): CommandResult {
+  if (!request.trim()) {
+    throw new Error('create requires a request string or PRD path');
+  }
+
+  const source = resolveGoSourceInput(projectRoot, request, flags);
+  const promptEnvelope = createPromptImproverEnvelope(projectRoot, source.sourceText, flags);
+  const productResolution = buildCanonicalProductSpec(projectRoot, source, promptEnvelope.promptImprover, flags);
+  const preflight = getHarnessExecutionPreflight(projectRoot, 'codex');
+  const runId = generateRunId('create');
+  const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
+  const specPath = path.join(projectRoot, '.agent', 'runs', `${runId}.spec.json`);
+  const outputDir = flagString(flags, 'output-dir');
+  const overwrite = flags.overwrite === true || flags.force === true;
+  const preflightWarnings = preflight.isRunnable ? [] : preflight.blockingIssues;
+
+  writeJson(specPath, productResolution.canonicalSpec);
+
+  const baseArtifact = {
+    schemaVersion: 1,
+    runId,
+    workflow: 'create',
+    request,
+    sourceType: source.sourceType,
+    sourcePath: source.sourcePath,
+    normalizedRequest: promptEnvelope.promptImprover.normalizedObjective,
+    promptImproverMode: promptEnvelope.mode,
+    promptImprover: promptEnvelope.promptImprover,
+    contextPilot: promptEnvelope.contextPilot,
+    canonicalSpecPath: path.relative(projectRoot, specPath),
+    canonicalSpec: productResolution.canonicalSpec,
+    laneSelection: {
+      laneId: productResolution.lane.id,
+      confidence: productResolution.laneConfidence,
+      evidence: productResolution.laneEvidence
+    },
+    packSelection: {
+      selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+      requestedPackIds: productResolution.requestedPackIds,
+      unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+      missingConfig: productResolution.missingConfig,
+      reviewReasons: productResolution.reviewReasons
+    },
+    preflight,
+    preflightWarnings,
+    createdAt: isoNow()
+  };
+
+  try {
+    const bundle = createProductBundle({
+      projectRoot,
+      spec: productResolution.canonicalSpec,
+      lane: productResolution.lane,
+      selectedPacks: productResolution.selectedPacks,
+      bundleId: runId,
+      outputDir,
+      overwrite
+    });
+
+    writeJson(runPath, {
+      ...baseArtifact,
+      status: 'HANDOFF_READY',
+      bundleDir: path.relative(projectRoot, bundle.bundleDir),
+      bundleManifestPath: path.relative(projectRoot, bundle.manifestPath),
+      generatedFiles: bundle.files
+    });
+
+    if (!jsonMode) {
+      console.log(`Create bundle completed: ${runId}`);
+      console.log(`Normalized request: ${promptEnvelope.promptImprover.normalizedObjective}`);
+      console.log(`Product lane: ${productResolution.canonicalSpec.lane} (${productResolution.canonicalSpec.laneConfidence})`);
+      console.log(`Target stack: ${productResolution.canonicalSpec.targetStack}`);
+      console.log(`Bundle directory: ${bundle.bundleDir}`);
+      console.log(`Bundle manifest: ${bundle.manifestPath}`);
+      if (preflightWarnings.length > 0) {
+        console.log(`Preflight warnings: ${preflightWarnings.join(' | ')}`);
+      }
+      console.log(`Run artifact: ${runPath}`);
+    }
+
+    return {
+      code: 0,
+      payload: {
+        runId,
+        outcome: 'HANDOFF_READY',
+        sourceType: source.sourceType,
+        sourcePath: source.sourcePath,
+        normalizedRequest: promptEnvelope.promptImprover.normalizedObjective,
+        canonicalSpec: productResolution.canonicalSpec,
+        laneSelection: {
+          laneId: productResolution.lane.id,
+          confidence: productResolution.laneConfidence,
+          evidence: productResolution.laneEvidence
+        },
+        packSelection: {
+          selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+          requestedPackIds: productResolution.requestedPackIds,
+          unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+          missingConfig: productResolution.missingConfig,
+          reviewReasons: productResolution.reviewReasons
+        },
+        bundleDir: bundle.bundleDir,
+        bundleManifest: bundle.manifestPath,
+        generatedFiles: bundle.files,
+        preflight,
+        preflightWarnings,
+        runArtifact: runPath,
+        specArtifact: specPath,
+        promptImprover: promptEnvelope.promptImprover,
+        contextPilot: promptEnvelope.contextPilot
+      }
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeJson(runPath, {
+      ...baseArtifact,
+      status: 'FAILED',
+      error: message
+    });
+
+    return {
+      code: 1,
+      payload: {
+        runId,
+        outcome: 'FAILED',
+        error: message,
+        sourceType: source.sourceType,
+        sourcePath: source.sourcePath,
+        normalizedRequest: promptEnvelope.promptImprover.normalizedObjective,
+        canonicalSpec: productResolution.canonicalSpec,
+        preflight,
+        preflightWarnings,
+        runArtifact: runPath,
+        specArtifact: specPath,
+        promptImprover: promptEnvelope.promptImprover,
+        contextPilot: promptEnvelope.contextPilot
+      }
+    };
+  }
+}
+
+function buildMinionExecutionTask(canonicalSpec: CanonicalProductSpec): string {
+  const acceptanceSummary = canonicalSpec.acceptanceCriteria.slice(0, 4).join(' ');
+  const packSummary = canonicalSpec.enterprisePacks.join(', ') || 'none';
+  const deliverySummary = canonicalSpec.deliveryTarget === 'downstream-install'
+    ? `downstream install into ${canonicalSpec.downstreamTarget || 'the requested target'}`
+    : canonicalSpec.deliveryTarget.replace(/-/gu, ' ');
+
+  return normalizeObjectiveText([
+    canonicalSpec.summary,
+    `Execute the ${canonicalSpec.lane} lane on ${canonicalSpec.targetStack}.`,
+    `Apply enterprise packs: ${packSummary}.`,
+    `Delivery target: ${deliverySummary}.`,
+    acceptanceSummary
+  ].filter(Boolean).join(' '));
+}
+
+function resolveMinionValidateMode(flags: Record<string, FlagValue>, canonicalSpec: CanonicalProductSpec): string {
+  const explicit = flagString(flags, 'validate');
+  if (explicit) {
+    return explicit;
+  }
+
+  if (canonicalSpec.riskTier === 'high' || canonicalSpec.requiresHumanReview) {
+    return 'all';
+  }
+
+  if (canonicalSpec.riskTier === 'medium') {
+    return 'lint';
+  }
+
+  return 'tsc';
+}
+
+function runMinionWorkflow(
+  projectRoot: string,
+  task: string,
+  flags: Record<string, FlagValue>,
+  jsonMode: boolean
+): CommandResult {
+  if (!task.trim()) {
+    throw new Error('minion requires a task string');
+  }
+
+  const source = resolveGoSourceInput(projectRoot, task, flags);
+  const promptEnvelope = createPromptImproverEnvelope(projectRoot, source.sourceText, flags);
+  const productResolution = buildCanonicalProductSpec(projectRoot, source, promptEnvelope.promptImprover, flags);
+  const preflight = getHarnessExecutionPreflight(projectRoot, 'codex');
+  const runId = generateRunId('minion');
+  const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
+  const specPath = path.join(projectRoot, '.agent', 'runs', `${runId}.spec.json`);
+  const validateMode = resolveMinionValidateMode(flags, productResolution.canonicalSpec);
+  const docSyncMode = flagString(flags, 'doc-sync') || 'auto';
+  const worktreeMode = flagString(flags, 'worktree') || 'none';
+  const delegatedTask = buildMinionExecutionTask(productResolution.canonicalSpec);
+  const baseArtifact = {
+    schemaVersion: 1,
+    runId,
+    workflow: 'minion',
+    task,
+    sourceType: source.sourceType,
+    sourcePath: source.sourcePath,
+    normalizedTask: promptEnvelope.promptImprover.normalizedObjective,
+    promptImproverMode: promptEnvelope.mode,
+    promptImprover: promptEnvelope.promptImprover,
+    contextPilot: promptEnvelope.contextPilot,
+    canonicalSpecPath: path.relative(projectRoot, specPath),
+    canonicalSpec: productResolution.canonicalSpec,
+    laneSelection: {
+      laneId: productResolution.lane.id,
+      confidence: productResolution.laneConfidence,
+      evidence: productResolution.laneEvidence
+    },
+    packSelection: {
+      selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+      requestedPackIds: productResolution.requestedPackIds,
+      unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+      missingConfig: productResolution.missingConfig,
+      reviewReasons: productResolution.reviewReasons
+    },
+    preflight,
+    executionPlan: {
+      delegatedWorkflow: 'symphony-lite',
+      delegatedTask,
+      validateMode,
+      docSyncMode,
+      worktreeMode
+    },
+    createdAt: isoNow()
+  };
+
+  writeJson(specPath, productResolution.canonicalSpec);
+
+  if (!preflight.isRunnable) {
+    writeJson(runPath, {
+      ...baseArtifact,
+      status: 'BLOCKED',
+      blockingIssues: preflight.blockingIssues
+    });
+
+    return {
+      code: 1,
+      payload: {
+        runId,
+        sourceType: source.sourceType,
+        sourcePath: source.sourcePath,
+        normalizedTask: promptEnvelope.promptImprover.normalizedObjective,
+        canonicalSpec: productResolution.canonicalSpec,
+        laneSelection: {
+          laneId: productResolution.lane.id,
+          confidence: productResolution.laneConfidence,
+          evidence: productResolution.laneEvidence
+        },
+        packSelection: {
+          selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+          requestedPackIds: productResolution.requestedPackIds,
+          unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+          missingConfig: productResolution.missingConfig,
+          reviewReasons: productResolution.reviewReasons
+        },
+        executionPlan: {
+          delegatedWorkflow: 'symphony-lite',
+          delegatedTask,
+          validateMode,
+          docSyncMode,
+          worktreeMode
+        },
+        outcome: 'BLOCKED',
+        preflight,
+        blockingIssues: preflight.blockingIssues,
+        runArtifact: runPath,
+        specArtifact: specPath,
+        promptImprover: promptEnvelope.promptImprover,
+        contextPilot: promptEnvelope.contextPilot
+      }
+    };
+  }
+
+  if (isBuilderEligible(productResolution)) {
+    const builderResult = routeSupportedProductToBuilder(projectRoot, task, flags, runId);
+    const builderPayload = (builderResult.payload || {}) as {
+      outcome?: string;
+      runArtifact?: string;
+      specArtifact?: string;
+      bundleDir?: string;
+      bundleManifest?: string;
+      generatedFiles?: string[];
+      preflightWarnings?: string[];
+    };
+    const outcome = builderPayload.outcome || (builderResult.code === 0 ? 'HANDOFF_READY' : 'FAILED');
+
+    writeJson(runPath, {
+      ...baseArtifact,
+      status: outcome,
+      executionPlan: {
+        delegatedWorkflow: 'create',
+        delegatedTask,
+        validateMode,
+        docSyncMode,
+        worktreeMode
+      },
+      resolvedExecutionPath: 'builder',
+      builderEligible: true,
+      builderInvoked: true,
+      downstreamRunArtifact: builderPayload.runArtifact
+        ? path.relative(projectRoot, builderPayload.runArtifact)
+        : undefined,
+      downstreamSpecArtifact: builderPayload.specArtifact
+        ? path.relative(projectRoot, builderPayload.specArtifact)
+        : undefined,
+      bundleDir: typeof builderPayload.bundleDir === 'string'
+        ? path.relative(projectRoot, builderPayload.bundleDir)
+        : undefined,
+      bundleManifestPath: typeof builderPayload.bundleManifest === 'string'
+        ? path.relative(projectRoot, builderPayload.bundleManifest)
+        : undefined,
+      generatedFiles: Array.isArray(builderPayload.generatedFiles) ? builderPayload.generatedFiles : undefined,
+      preflightWarnings: Array.isArray(builderPayload.preflightWarnings) ? builderPayload.preflightWarnings : []
+    });
+
+    if (!jsonMode) {
+      console.log(`Minion execution routed: ${runId}`);
+      console.log(`Normalized task: ${promptEnvelope.promptImprover.normalizedObjective}`);
+      console.log(`Product lane: ${productResolution.canonicalSpec.lane} (${productResolution.canonicalSpec.laneConfidence})`);
+      console.log(`Target stack: ${productResolution.canonicalSpec.targetStack}`);
+      console.log(`Enterprise packs: ${productResolution.canonicalSpec.enterprisePacks.join(', ') || 'none'}`);
+      console.log('Delegated workflow: create');
+      if (typeof builderPayload.bundleDir === 'string') {
+        console.log(`Bundle directory: ${builderPayload.bundleDir}`);
+      }
+      console.log(`Canonical spec: ${specPath}`);
+      console.log(`Run artifact: ${runPath}`);
+    }
+
+    return {
+      code: builderResult.code,
+      payload: {
+        runId,
+        sourceType: source.sourceType,
+        sourcePath: source.sourcePath,
+        normalizedTask: promptEnvelope.promptImprover.normalizedObjective,
+        canonicalSpec: productResolution.canonicalSpec,
+        laneSelection: {
+          laneId: productResolution.lane.id,
+          confidence: productResolution.laneConfidence,
+          evidence: productResolution.laneEvidence
+        },
+        packSelection: {
+          selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+          requestedPackIds: productResolution.requestedPackIds,
+          unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+          missingConfig: productResolution.missingConfig,
+          reviewReasons: productResolution.reviewReasons
+        },
+        executionPlan: {
+          delegatedWorkflow: 'create',
+          delegatedTask,
+          validateMode,
+          docSyncMode,
+          worktreeMode
+        },
+        outcome,
+        resolvedExecutionPath: 'builder',
+        builderEligible: true,
+        builderInvoked: true,
+        bundleDir: builderPayload.bundleDir,
+        bundleManifest: builderPayload.bundleManifest,
+        generatedFiles: builderPayload.generatedFiles,
+        preflight,
+        preflightWarnings: builderPayload.preflightWarnings || [],
+        runArtifact: runPath,
+        specArtifact: specPath,
+        downstreamRunArtifact: builderPayload.runArtifact,
+        downstreamSpecArtifact: builderPayload.specArtifact,
+        promptImprover: promptEnvelope.promptImprover,
+        contextPilot: promptEnvelope.contextPilot
+      }
+    };
+  }
+
+  const delegatedFlags: Record<string, FlagValue> = {
+    ...flags,
+    validate: validateMode,
+    'doc-sync': docSyncMode,
+    worktree: worktreeMode
+  };
+  const delegatedResult = runSymphonyLite(projectRoot, delegatedTask, delegatedFlags, true);
+  const delegatedPayload = (delegatedResult.payload || {}) as {
+    outcome?: string;
+    runArtifact?: string;
+    validateMode?: string;
+    docSync?: unknown;
+    worktreeMode?: string;
+    validations?: unknown;
+  };
+  writeJson(runPath, {
+    ...baseArtifact,
+    resolvedExecutionPath: 'autonomous',
+    builderEligible: false,
+    builderInvoked: false,
+    downstreamRunArtifact: delegatedPayload.runArtifact
+      ? path.relative(projectRoot, delegatedPayload.runArtifact)
+      : undefined,
+    status: delegatedPayload.outcome || (delegatedResult.code === 0 ? 'HANDOFF_READY' : 'BLOCKED')
+  });
+
+  if (!jsonMode) {
+    console.log(`Minion execution routed: ${runId}`);
+    console.log(`Normalized task: ${promptEnvelope.promptImprover.normalizedObjective}`);
+    console.log(`Product lane: ${productResolution.canonicalSpec.lane} (${productResolution.canonicalSpec.laneConfidence})`);
+    console.log(`Target stack: ${productResolution.canonicalSpec.targetStack}`);
+    console.log(`Enterprise packs: ${productResolution.canonicalSpec.enterprisePacks.join(', ') || 'none'}`);
+    console.log(`Delegated workflow: symphony-lite`);
+    console.log(`Validation mode: ${validateMode}`);
+    console.log(`Canonical spec: ${specPath}`);
+    console.log(`Run artifact: ${runPath}`);
+  }
+
+  return {
+    code: delegatedResult.code,
+    payload: {
+      runId,
+      sourceType: source.sourceType,
+      sourcePath: source.sourcePath,
+      normalizedTask: promptEnvelope.promptImprover.normalizedObjective,
+      canonicalSpec: productResolution.canonicalSpec,
+      laneSelection: {
+        laneId: productResolution.lane.id,
+        confidence: productResolution.laneConfidence,
+        evidence: productResolution.laneEvidence
+      },
+      packSelection: {
+        selectedPackIds: productResolution.selectedPacks.map((pack) => pack.id),
+        requestedPackIds: productResolution.requestedPackIds,
+        unsupportedRequestedPackIds: productResolution.unsupportedRequestedPackIds,
+        missingConfig: productResolution.missingConfig,
+        reviewReasons: productResolution.reviewReasons
+      },
+      executionPlan: {
+        delegatedWorkflow: 'symphony-lite',
+        delegatedTask,
+        validateMode,
+        docSyncMode,
+        worktreeMode
+      },
+      outcome: delegatedPayload.outcome || (delegatedResult.code === 0 ? 'HANDOFF_READY' : 'BLOCKED'),
+      resolvedExecutionPath: 'autonomous',
+      builderEligible: false,
+      builderInvoked: false,
+      preflight,
+      runArtifact: runPath,
+      specArtifact: specPath,
+      downstreamRunArtifact: delegatedPayload.runArtifact,
+      delegatedResult: delegatedPayload,
+      promptImprover: promptEnvelope.promptImprover,
+      contextPilot: promptEnvelope.contextPilot
     }
   };
 }
@@ -1536,7 +2715,7 @@ function runSymphonyLite(
   }
 
   const outcome = failed || docSync.status === 'failed' ? 'BLOCKED' : 'HANDOFF_READY';
-  const runId = `symphony-${Date.now()}`;
+  const runId = generateRunId('symphony');
   const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
 
   const artifact = {
@@ -1690,7 +2869,7 @@ function runFullDocUpdate(
 
   fs.writeFileSync(reportPath, `${reportLines.join('\n')}\n`, 'utf8');
 
-  const runId = `full-doc-update-${Date.now()}`;
+  const runId = generateRunId('full-doc-update');
   const runArtifactPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
   const runArtifact = {
     schemaVersion: 1,
@@ -2249,7 +3428,7 @@ function runHydraSidecar(
 
   const promptEnvelope = createPromptImproverEnvelope(projectRoot, objective, flags);
   const decision = runHydraSidecarDecision(objective, flags, promptEnvelope.promptImprover, promptEnvelope.contextPilot);
-  const runId = `hydra-sidecar-${Date.now()}`;
+  const runId = generateRunId('hydra-sidecar');
   const runPath = path.join(projectRoot, '.agent', 'runs', `${runId}.json`);
   const artifact = {
     schemaVersion: 1,
@@ -2345,6 +3524,14 @@ function commandWorkflow(projectRoot: string, action: string | undefined, argv: 
       return runGoWorkflow(projectRoot, runtimeInput, flags, jsonMode);
     }
 
+    if (slug === 'create') {
+      return runCreateWorkflow(projectRoot, runtimeInput, flags, jsonMode);
+    }
+
+    if (slug === 'minion') {
+      return runMinionWorkflow(projectRoot, runtimeInput, flags, jsonMode);
+    }
+
     if (slug === 'paperclip-extracted') {
       return runPaperclipExtracted(projectRoot, runtimeInput, flags, jsonMode);
     }
@@ -2369,8 +3556,12 @@ function commandWorkflow(projectRoot: string, action: string | undefined, argv: 
       return runHydraSidecar(projectRoot, runtimeInput, flags, jsonMode);
     }
 
+    if (slug === 'agentic-status') {
+      return runAgenticStatusWorkflow(projectRoot, runtimeInput, flags, jsonMode);
+    }
+
     const paths = getHarnessPaths(projectRoot);
-    const runId = `workflow-${slug}-${Date.now()}`;
+    const runId = generateRunId(`workflow-${slug}`);
     const runPath = path.join(paths.runArtifactDir, `${runId}.json`);
     const payload = {
       schemaVersion: 1,
@@ -2848,6 +4039,325 @@ function commandValidate(projectRoot: string, action: string | undefined, jsonMo
   };
 }
 
+function parseScalarFlagValue(raw: string): unknown {
+  const trimmed = raw.trim();
+  if (!trimmed.length) {
+    return '';
+  }
+  if (trimmed === 'null') return null;
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (/^-?\d+(?:\.\d+)?$/u.test(trimmed)) {
+    return Number(trimmed);
+  }
+  if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
+function parseJsonObjectFlag(raw: string, label: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`${label} must be a JSON object`);
+    }
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'unknown error';
+    throw new Error(`Invalid ${label}: ${detail}`);
+  }
+}
+
+function parseJsonArrayFlag(raw: string, label: string): Array<Record<string, unknown>> {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
+      throw new Error(`${label} must be a JSON array of objects`);
+    }
+    return parsed as Array<Record<string, unknown>>;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'unknown error';
+    throw new Error(`Invalid ${label}: ${detail}`);
+  }
+}
+
+interface HarnessUIRPCRequest {
+  type: 'snapshot' | 'command';
+  command?: Record<string, unknown>;
+}
+
+interface HarnessUIRPCResponse {
+  ok: boolean;
+  processedCommandId?: string | null;
+  snapshot?: unknown;
+  error?: string | null;
+}
+
+function parseHarnessUIRPCRequest(raw: string, label: string): HarnessUIRPCRequest {
+  const parsed = parseJsonObjectFlag(raw, label) as Record<string, unknown>;
+  if (parsed.type !== 'snapshot' && parsed.type !== 'command') {
+    throw new Error(`Invalid ${label}: type must be "snapshot" or "command"`);
+  }
+  return parsed as unknown as HarnessUIRPCRequest;
+}
+
+async function sendHarnessUIRPCRequest(host: string, port: number, request: HarnessUIRPCRequest): Promise<HarnessUIRPCResponse> {
+  return await new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host, port }, () => {
+      socket.end(JSON.stringify(request));
+    });
+    const chunks: Buffer[] = [];
+
+    socket.on('data', (chunk) => {
+      chunks.push(chunk);
+    });
+    socket.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8').trim();
+        resolve(JSON.parse(raw) as HarnessUIRPCResponse);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'unknown error';
+        reject(new Error(`Invalid harness UI RPC response: ${detail}`));
+      }
+    });
+    socket.on('error', (error) => {
+      reject(error);
+    });
+  });
+}
+
+function buildHarnessUICommandEnvelope(flags: Record<string, FlagValue>): Record<string, unknown> {
+  const rawCommand = flagString(flags, 'command');
+  if (rawCommand) {
+    return parseJsonObjectFlag(rawCommand, '--command');
+  }
+
+  const commandFile = flagString(flags, 'command-file');
+  if (commandFile) {
+    return parseJsonObjectFlag(fs.readFileSync(path.resolve(commandFile), 'utf8'), '--command-file');
+  }
+
+  const type = flagString(flags, 'type');
+  if (!type) {
+    throw new Error('Usage: gg harness ui command (--command <json> | --command-file <path> | --type <type> [--id <value>] [...])');
+  }
+
+  const command: Record<string, unknown> = { type };
+  const id = flagString(flags, 'id');
+  if (id) command.id = id;
+
+  const fieldMap: Array<[string, string]> = [
+    ['tab', 'tab'],
+    ['run-id', 'runId'],
+    ['agent-id', 'agentId'],
+    ['title', 'title'],
+    ['runtime', 'runtime'],
+    ['text', 'text'],
+    ['patch', 'patch'],
+    ['reason', 'reason'],
+    ['problem-id', 'problemId'],
+    ['problem-action', 'problemAction'],
+    ['path', 'path'],
+    ['source-label', 'sourceLabel'],
+    ['worktree-path', 'worktreePath'],
+    ['worktree-label', 'worktreeLabel'],
+    ['panel', 'panel'],
+    ['explorer-root', 'explorerRoot'],
+    ['preset', 'preset'],
+    ['working-directory', 'workingDirectory'],
+    ['destination', 'destination']
+  ];
+
+  for (const [flag, key] of fieldMap) {
+    const value = flagString(flags, flag);
+    if (value !== undefined) {
+      command[key] = value;
+    }
+  }
+
+  if (flags['dry-run'] !== undefined) {
+    command.dryRun = booleanFlag(flags, 'dry-run', false);
+  }
+
+  return command;
+}
+
+async function commandHarnessUI(argv: string[], jsonMode: boolean): Promise<CommandResult> {
+  const [uiAction, ...rest] = argv;
+  if (!uiAction || !['snapshot', 'command', 'batch'].includes(uiAction)) {
+    throw new Error('Usage: gg harness ui <snapshot|command|batch> [options]');
+  }
+
+  const { flags } = parseArgs(rest);
+  const host = flagString(flags, 'host') || '127.0.0.1';
+  const port = intFlag(flags, 'port', 7331);
+
+  if (uiAction === 'snapshot') {
+    const request: HarnessUIRPCRequest = { type: 'snapshot' };
+    const response = await sendHarnessUIRPCRequest(host, port, request);
+    if (!jsonMode) {
+      console.log(JSON.stringify(response, null, 2));
+    }
+    return {
+      code: response.ok ? 0 : 1,
+      payload: { host, port, request, response }
+    };
+  }
+
+  if (uiAction === 'command') {
+    const rawRequest = flagString(flags, 'request');
+    const requestFile = flagString(flags, 'request-file');
+    const request = rawRequest
+      ? parseHarnessUIRPCRequest(rawRequest, '--request')
+      : requestFile
+        ? parseHarnessUIRPCRequest(fs.readFileSync(path.resolve(requestFile), 'utf8'), '--request-file')
+        : { type: 'command' as const, command: buildHarnessUICommandEnvelope(flags) };
+    const response = await sendHarnessUIRPCRequest(host, port, request);
+    if (!jsonMode) {
+      console.log(JSON.stringify(response, null, 2));
+    }
+    return {
+      code: response.ok ? 0 : 1,
+      payload: { host, port, request, response }
+    };
+  }
+
+  const rawCommands = flagString(flags, 'commands');
+  const commandsFile = flagString(flags, 'commands-file');
+  const commands = rawCommands
+    ? parseJsonArrayFlag(rawCommands, '--commands')
+    : commandsFile
+      ? parseJsonArrayFlag(fs.readFileSync(path.resolve(commandsFile), 'utf8'), '--commands-file')
+      : null;
+  if (!commands || commands.length === 0) {
+    throw new Error('Usage: gg harness ui batch (--commands <json-array> | --commands-file <path>) [--host <host>] [--port <port>]');
+  }
+
+  const responses: HarnessUIRPCResponse[] = [];
+  for (const command of commands) {
+    responses.push(await sendHarnessUIRPCRequest(host, port, { type: 'command', command }));
+  }
+  const failed = responses.find((response) => !response.ok);
+
+  if (!jsonMode) {
+    console.log(JSON.stringify(responses, null, 2));
+  }
+
+  return {
+    code: failed ? 1 : 0,
+    payload: { host, port, requests: commands, responses }
+  };
+}
+
+function setByDotPath(target: Record<string, unknown>, dotPath: string, value: unknown): void {
+  const parts = dotPath.split('.').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) {
+    throw new Error('Harness settings key must not be empty');
+  }
+
+  let cursor: Record<string, unknown> = target;
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const key = parts[index];
+    const existing = cursor[key];
+    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
+      cursor[key] = {};
+    }
+    cursor = cursor[key] as Record<string, unknown>;
+  }
+
+  cursor[parts[parts.length - 1]] = value;
+}
+
+async function commandHarness(projectRoot: string, action: string | undefined, argv: string[], jsonMode: boolean): Promise<CommandResult> {
+  if (!action || !['settings', 'diagram', 'ui'].includes(action)) {
+    throw new Error('Usage: gg harness <settings|diagram|ui> ...');
+  }
+
+  if (action === 'ui') {
+    return await commandHarnessUI(argv, jsonMode);
+  }
+
+  if (action === 'diagram') {
+    const { flags } = parseArgs(argv);
+    const format = flagString(flags, 'format') === 'html' ? 'html' : 'json';
+    const settings = readHarnessSettings(projectRoot);
+    const artifactPath = resolveHarnessDiagramPath(projectRoot, settings);
+
+    if (!jsonMode && format === 'html') {
+      console.log(artifactPath);
+    }
+
+    return {
+      code: fs.existsSync(artifactPath) ? 0 : 1,
+      payload: {
+        format,
+        artifactPath,
+        artifactRelativePath: settings.diagram.primaryArtifact,
+        settings
+      }
+    };
+  }
+
+  const [settingsAction, ...rest] = argv;
+  if (!settingsAction || !['get', 'set', 'reset'].includes(settingsAction)) {
+    throw new Error('Usage: gg harness settings <get|set|reset> [--key <dot.path> --value <value>]');
+  }
+
+  if (settingsAction === 'get') {
+    const settings = readHarnessSettings(projectRoot);
+    if (!jsonMode) {
+      console.log(JSON.stringify(settings, null, 2));
+    }
+    return {
+      code: 0,
+      payload: {
+        settings,
+        path: harnessSettingsPath(projectRoot)
+      }
+    };
+  }
+
+  if (settingsAction === 'reset') {
+    const settings = resetHarnessSettings(projectRoot);
+    if (!jsonMode) {
+      console.log(`Reset harness settings: ${harnessSettingsPath(projectRoot)}`);
+    }
+    return {
+      code: 0,
+      payload: {
+        settings,
+        path: harnessSettingsPath(projectRoot)
+      }
+    };
+  }
+
+  const { flags } = parseArgs(rest);
+  const key = flagString(flags, 'key');
+  const rawValue = flagString(flags, 'value');
+  if (!key || rawValue === undefined) {
+    throw new Error('Usage: gg harness settings set --key <dot.path> --value <value>');
+  }
+
+  const next = readHarnessSettings(projectRoot);
+  setByDotPath(next as unknown as Record<string, unknown>, key, parseScalarFlagValue(rawValue));
+  const settings = writeHarnessSettings(projectRoot, next);
+  if (!jsonMode) {
+    console.log(`Updated harness settings: ${key}`);
+  }
+  return {
+    code: 0,
+    payload: {
+      settings,
+      path: harnessSettingsPath(projectRoot)
+    }
+  };
+}
+
 function commandObsidian(projectRoot: string, action: string | undefined, jsonMode: boolean): CommandResult {
   let result: ExecOutcome;
 
@@ -2908,6 +4418,25 @@ function ensurePortableDocs(projectRoot: string, targetRoot: string): void {
 
   fs.mkdirSync(path.join(targetRoot, 'docs', 'decisions'), { recursive: true });
   fs.mkdirSync(path.join(targetRoot, 'docs', 'governance', 'feedback-loop-proposals'), { recursive: true });
+}
+
+function ensurePortableAgentAssets(projectRoot: string, targetRoot: string, mode: 'symlink' | 'copy'): void {
+  fs.mkdirSync(path.join(targetRoot, '.agent'), { recursive: true });
+
+  for (const relativePath of PORTABLE_AGENT_PATHS) {
+    ensureSymlinkOrCopy(path.join(projectRoot, relativePath), path.join(targetRoot, relativePath), mode);
+  }
+
+  fs.mkdirSync(path.join(targetRoot, '.agent', 'control-plane', 'server'), { recursive: true });
+  fs.mkdirSync(path.join(targetRoot, '.agent', 'control-plane', 'runs'), { recursive: true });
+  fs.mkdirSync(path.join(targetRoot, '.agent', 'control-plane', 'worktrees'), { recursive: true });
+  fs.mkdirSync(path.join(targetRoot, '.agent', 'control-plane', 'executions'), { recursive: true });
+  fs.mkdirSync(path.join(targetRoot, '.agent', 'runs'), { recursive: true });
+
+  const runPlaceholder = path.join(targetRoot, '.agent', 'runs', '.gitkeep');
+  if (!fs.existsSync(runPlaceholder)) {
+    fs.writeFileSync(runPlaceholder, '', 'utf8');
+  }
 }
 
 function mergePortablePackageScripts(targetPackagePath: string): void {
@@ -3008,6 +4537,28 @@ function validatePortablePackageScripts(targetRoot: string): { ok: boolean; deta
   };
 }
 
+function validatePortableHarnessSettings(targetRoot: string): { ok: boolean; detail: string } {
+  const settings = readHarnessSettings(targetRoot);
+  const filePath = harnessSettingsPath(targetRoot);
+  return {
+    ok: fs.existsSync(filePath) && settings.execution.loopBudget > 0,
+    detail: fs.existsSync(filePath)
+      ? `Harness settings are present at ${filePath}`
+      : `Harness settings are missing at ${filePath}`
+  };
+}
+
+function validatePortableDiagramArtifact(targetRoot: string): { ok: boolean; detail: string } {
+  const settings = readHarnessSettings(targetRoot);
+  const artifactPath = resolveHarnessDiagramPath(targetRoot, settings);
+  return {
+    ok: fs.existsSync(artifactPath),
+    detail: fs.existsSync(artifactPath)
+      ? `Dynamic harness diagram is present at ${artifactPath}`
+      : `Dynamic harness diagram is missing at ${artifactPath}`
+  };
+}
+
 function executeJsonNodeScript(
   targetRoot: string,
   scriptPath: string,
@@ -3021,6 +4572,27 @@ function executeJsonNodeScript(
     parsed = null;
   }
   return { ...result, parsed };
+}
+
+function runCliLike(projectRoot: string, targetRoot: string, args: string[]): CommandResult {
+  const result = executeCommand(
+    'node',
+    [path.join(projectRoot, 'packages', 'gg-cli', 'dist', 'index.js'), '--json', '--project-root', targetRoot, ...args],
+    projectRoot,
+    true
+  );
+
+  let payload: unknown = null;
+  try {
+    payload = result.stdout.trim() ? JSON.parse(result.stdout) : null;
+  } catch {
+    payload = null;
+  }
+
+  return {
+    code: result.code,
+    payload
+  };
 }
 
 function commandPortableVerify(
@@ -3043,6 +4615,20 @@ function commandPortableVerify(
     name: 'package_scripts',
     status: packageScriptCheck.ok ? 'pass' : 'fail',
     detail: packageScriptCheck.detail
+  });
+
+  const harnessSettingsCheck = validatePortableHarnessSettings(targetRoot);
+  checks.push({
+    name: 'harness_settings',
+    status: harnessSettingsCheck.ok ? 'pass' : 'fail',
+    detail: harnessSettingsCheck.detail
+  });
+
+  const harnessDiagramCheck = validatePortableDiagramArtifact(targetRoot);
+  checks.push({
+    name: 'harness_diagram',
+    status: harnessDiagramCheck.ok ? 'pass' : 'fail',
+    detail: harnessDiagramCheck.detail
   });
 
   const doctor = commandDoctor(targetRoot, true);
@@ -3116,19 +4702,39 @@ function commandPortableVerify(
 
   const runtimeRegistryPath = path.join(targetRoot, '.agent', 'registry', 'mcp-runtime.json');
   const runtimeRegistry = readJsonFile<{
-    profiles?: Record<string, { optional?: string[] }>;
+    profiles?: Record<string, { optional?: string[]; execution?: { adapterMode?: string; defaultLaunchTransport?: string } }>;
   }>(runtimeRegistryPath);
   const profiles = ['codex', 'claude', 'kimi'];
   const parityMissing = profiles.filter(
     (profile) => !runtimeRegistry?.profiles?.[profile]?.optional?.includes('claude-mem')
   );
+  const kimiExecution = runtimeRegistry?.profiles?.kimi?.execution;
+  const kimiExecutionOk =
+    kimiExecution?.adapterMode === 'provider-api' &&
+    kimiExecution?.defaultLaunchTransport === 'api-session';
   checks.push({
     name: 'runtime_registry',
-    status: parityMissing.length === 0 ? 'pass' : 'fail',
+    status: parityMissing.length === 0 && kimiExecutionOk ? 'pass' : 'fail',
     detail:
-      parityMissing.length === 0
-        ? 'Runtime registry exposes claude-mem parity for codex/claude/kimi'
-        : `Runtime registry missing claude-mem parity on: ${parityMissing.join(', ')}`
+      parityMissing.length === 0 && kimiExecutionOk
+        ? 'Runtime registry exposes claude-mem parity and the Kimi provider-api contract'
+        : parityMissing.length > 0
+          ? `Runtime registry missing claude-mem parity on: ${parityMissing.join(', ')}`
+          : 'Runtime registry is missing the Kimi provider-api execution contract'
+  });
+
+  const harnessCliGet = runCliLike(projectRoot, targetRoot, ['harness', 'settings', 'get']);
+  checks.push({
+    name: 'harness_cli_settings_get',
+    status: harnessCliGet.code === 0 ? 'pass' : 'fail',
+    detail: harnessCliGet.code === 0 ? 'gg harness settings get passed' : 'gg harness settings get failed'
+  });
+
+  const harnessCliDiagram = runCliLike(projectRoot, targetRoot, ['harness', 'diagram', '--format', 'json']);
+  checks.push({
+    name: 'harness_cli_diagram',
+    status: harnessCliDiagram.code === 0 ? 'pass' : 'fail',
+    detail: harnessCliDiagram.code === 0 ? 'gg harness diagram --format json passed' : 'gg harness diagram --format json failed'
   });
 
   if (runtimeMode === 'smoke') {
@@ -3205,7 +4811,7 @@ function commandPortable(projectRoot: string, action: string | undefined, argv: 
     });
   }
 
-  ensureSymlinkOrCopy(path.join(projectRoot, '.agent'), path.join(targetRoot, '.agent'), mode);
+  ensurePortableAgentAssets(projectRoot, targetRoot, mode);
   ensureSymlinkOrCopy(path.join(projectRoot, 'scripts'), path.join(targetRoot, 'scripts'), mode);
   ensureSymlinkOrCopy(path.join(projectRoot, 'evals'), path.join(targetRoot, 'evals'), mode);
   ensureSymlinkOrCopy(
@@ -3214,6 +4820,7 @@ function commandPortable(projectRoot: string, action: string | undefined, argv: 
     mode
   );
   ensurePortableDocs(projectRoot, targetRoot);
+  readHarnessSettings(targetRoot);
   mergePortablePackageScripts(targetPackagePath);
 
   const sourcePrompt = path.join(projectRoot, 'CLAUDE.md');
@@ -3353,6 +4960,9 @@ async function main(): Promise<void> {
         break;
       case 'validate':
         result = commandValidate(projectRoot, maybeAction, jsonMode);
+        break;
+      case 'harness':
+        result = await commandHarness(projectRoot, maybeAction, rest, jsonMode);
         break;
       case 'obsidian':
         result = commandObsidian(projectRoot, maybeAction, jsonMode);

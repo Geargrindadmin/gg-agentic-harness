@@ -1,0 +1,25 @@
+{
+  "id": "observability",
+  "name": "Observability",
+  "description": "Adds logging, telemetry hooks, error reporting surfaces, and operational diagnostics scaffolding.",
+  "v1Unattended": true,
+  "riskTier": "low",
+  "compatibleLanes": [
+    "marketing-site",
+    "saas-dashboard",
+    "admin-panel",
+    "crud-shell",
+    "content-portal"
+  ],
+  "requiredConfig": [],
+  "addsCapabilities": [
+    "logging-hooks",
+    "error-reporting",
+    "operational-diagnostics"
+  ],
+  "requiredGates": [
+    "typecheck",
+    "docs-bundle"
+  ],
+  "reviewRequired": false
+}

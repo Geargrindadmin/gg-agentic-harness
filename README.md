@@ -28,23 +28,40 @@ Build it with:
 npm run macos:control-surface:build
 ```
 
-Run it with:
+Open the freshly built bundle from `.dist` with:
 
 ```bash
 npm run macos:control-surface:run
+```
+
+Install or replace the app copy in `~/Applications` or `/Applications` with:
+
+```bash
+npm run macos:control-surface:install
+```
+
+Install and launch the replaced app with:
+
+```bash
+npm run macos:control-surface:run-installed
 ```
 
 Current scope:
 
 - the harness now exposes a native headless control-plane server at `packages/gg-control-plane-server`
 - the macOS app is an optional client over the same HTTP control plane
+- the macOS app now includes a `Harness` tab for live architecture visualization plus headless-backed harness settings
+- the `Harness` tab now shows control-plane connection state, saves into `.agent/control-plane/server/harness-settings.json`, and makes it explicit that changes affect new runs only
 - coordinator runtime selection is `Auto` by default, with explicit `Codex`, `Claude`, and `Kimi` pinning available in the dispatch surface
 - swarm steering, run/bus status, worktree browsing, and hardware-governed queueing are wired into the harness-native server
 - sub-agents get dedicated worktrees under `.agent/control-plane/worktrees/<runId>/<agentId>`
 - Kimi remains harness-controlled: it can request delegation, but the harness owns spawn/terminate policy
+- canonical harness policy now lives in `.agent/control-plane/server/harness-settings.json`, not in the app
 
 ## Architecture diagram
 
+- Dynamic user diagram source: [docs/architecture/agentic-harness-dynamic-user-diagram.html](docs/architecture/agentic-harness-dynamic-user-diagram.html)
+- Dynamic user diagram live preview: [Open rendered dynamic diagram](https://htmlpreview.github.io/?https://raw.githubusercontent.com/Geargrindadmin/gg-agentic-harness/main/docs/architecture/agentic-harness-dynamic-user-diagram.html)
 - Diagram source: [docs/architecture/agentic-harness-logic-loops-diagram.html](docs/architecture/agentic-harness-logic-loops-diagram.html)
 - Live HTML preview: [Open rendered diagram](https://htmlpreview.github.io/?https://raw.githubusercontent.com/Geargrindadmin/gg-agentic-harness/main/docs/architecture/agentic-harness-logic-loops-diagram.html)
 - External integration map source: [docs/architecture/agentic-harness-external-integration-architecture.md](docs/architecture/agentic-harness-external-integration-architecture.md)
@@ -76,6 +93,7 @@ Notes:
 - Use Python `3.10+` at minimum. On macOS, prefer Python `3.12+` so `CodeGraphContext` can use its default local database path cleanly.
 - Restart Codex after `npm run harness:runtime:activate` so repo-scoped MCP changes are loaded into the active session.
 - Coordinator `Auto` prefers authenticated local CLIs first, then provider-backed fallbacks, using `GG_COORDINATOR_PREFERENCE=codex,claude,kimi` unless overridden.
+- Headless harness settings are created automatically on first run at `.agent/control-plane/server/harness-settings.json`.
 
 ## Remote install into a project (one command)
 
@@ -97,6 +115,8 @@ npm run harness:runtime-parity
 npm run harness:persona:audit
 npm run harness:persona:benchmark
 npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer
+npm run gg -- harness settings get
+npm run gg -- harness diagram --format json
 ```
 
 ## Portable bootstrap into another repo
@@ -126,6 +146,10 @@ npm run gg -- workflow run visual-explainer "subject" --mode diff-review --evide
 npm run gg -- workflow run full-doc-update "task summary"
 npm run gg -- workflow run hydra-sidecar "evaluate auth hardening route" --hydra-mode shadow --internet-evidence "OWASP ASVS 2025-01-15,https://owasp.org/www-project-application-security-verification-standard/"
 npm run gg -- workflow show network-ai-pilot
+npm run gg -- harness settings get
+npm run gg -- harness settings set --key execution.loopBudget --value 32
+npm run gg -- harness settings reset
+npm run gg -- harness diagram --format html
 npm run harness:runtime:status
 npm run harness:runtime:activate
 npm run control-plane:start
@@ -155,6 +179,13 @@ Portable targets can be activated from the source harness CLI with runtime adapt
 
 ```bash
 node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo runtime activate /absolute/path/to/target-repo --runtime codex
+```
+
+Portable targets also inherit the headless harness settings contract and the dynamic user diagram:
+
+```bash
+node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo harness settings get
+node packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo harness diagram --format json
 ```
 
 ## Coordinator Selection

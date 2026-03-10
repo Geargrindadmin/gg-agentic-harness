@@ -472,6 +472,25 @@ final class A2AClient: ObservableObject {
         return r.jobs
     }
 
+    // MARK: - Harness settings and diagram
+
+    func fetchHarnessSettings() async throws -> HarnessSettingsModel {
+        try await get("/harness/settings")
+    }
+
+    func saveHarnessSettings(_ settings: HarnessSettingsModel) async throws -> HarnessSettingsModel {
+        try await put("/harness/settings", body: settings)
+    }
+
+    func resetHarnessSettings() async throws -> HarnessSettingsModel {
+        struct EmptyRequest: Codable {}
+        return try await post("/harness/settings/reset", body: EmptyRequest())
+    }
+
+    func fetchHarnessDiagram() async throws -> HarnessDiagramModel {
+        try await get("/harness/diagram")
+    }
+
     // MARK: - Worker steering
 
     func sendWorkerGuidance(runId: String, agentId: String, message: String) async throws {
@@ -602,7 +621,8 @@ final class A2AClient: ObservableObject {
                 bridgeAgents: bridgeAgents,
                 bridgeStrategy: bridgeStrategy,
                 bridgeRoles: bridgeRoles,
-                bridgeTimeoutSeconds: bridgeTimeoutSeconds
+                bridgeTimeoutSeconds: bridgeTimeoutSeconds,
+                harnessSettings: nil
             )
         )
         // Build an AgentRun from the flat dispatch response

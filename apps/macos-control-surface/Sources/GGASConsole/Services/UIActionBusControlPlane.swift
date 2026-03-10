@@ -22,9 +22,15 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
     let type: String
     let tab: String?
     let runId: String?
+    let agentId: String?
     let title: String?
     let runtime: String?
     let text: String?
+    let patch: String?
+    let reason: String?
+    let dryRun: Bool?
+    let problemId: String?
+    let problemAction: String?
     let path: String?
     let sourceLabel: String?
     let worktreePath: String?
@@ -40,9 +46,15 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
         type: String,
         tab: String? = nil,
         runId: String? = nil,
+        agentId: String? = nil,
         title: String? = nil,
         runtime: String? = nil,
         text: String? = nil,
+        patch: String? = nil,
+        reason: String? = nil,
+        dryRun: Bool? = nil,
+        problemId: String? = nil,
+        problemAction: String? = nil,
         path: String? = nil,
         sourceLabel: String? = nil,
         worktreePath: String? = nil,
@@ -57,9 +69,15 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
         self.type = type
         self.tab = tab
         self.runId = runId
+        self.agentId = agentId
         self.title = title
         self.runtime = runtime
         self.text = text
+        self.patch = patch
+        self.reason = reason
+        self.dryRun = dryRun
+        self.problemId = problemId
+        self.problemAction = problemAction
         self.path = path
         self.sourceLabel = sourceLabel
         self.worktreePath = worktreePath
@@ -83,6 +101,25 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
                 throw UIActionBusControlPlaneError.missingField("runId")
             }
             return .selectRun(runId: runId, title: title, runtime: runtime)
+        case "selectproblem":
+            guard let problemId = required(problemId, field: "problemId") else {
+                throw UIActionBusControlPlaneError.missingField("problemId")
+            }
+            return .selectProblem(id: problemId)
+        case "performproblemaction":
+            guard let problemId = required(problemId, field: "problemId") else {
+                throw UIActionBusControlPlaneError.missingField("problemId")
+            }
+            guard let problemAction = required(problemAction, field: "problemAction"),
+                  let capability = IDEProblemActionCapability.controlIdentifier(problemAction) else {
+                throw UIActionBusControlPlaneError.invalidValue(field: "problemAction", value: problemAction ?? "")
+            }
+            return .performProblemAction(
+                problemId: problemId,
+                capability: capability,
+                text: required(text, field: "text"),
+                dryRun: dryRun ?? false
+            )
         case "clearworkflowselection", "clearselection":
             return .clearWorkflowSelection
         case "replaceactivedocumentcontent", "setactivedocumentcontent", "writeactivedocument":
@@ -90,6 +127,15 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
                 throw UIActionBusControlPlaneError.missingField("text")
             }
             return .replaceActiveDocumentContent(text)
+        case "stagepatchforactivedocument", "queueactivedocumentpatch", "setactivedocumentpatch":
+            guard let patch = required(patch ?? text, field: "patch") else {
+                throw UIActionBusControlPlaneError.missingField("patch")
+            }
+            return .stagePatchForActiveDocument(patch)
+        case "applystagedpatchtoactivedocument", "applyactivedocumentpatch":
+            return .applyStagedPatchToActiveDocument
+        case "discardstagedpatchforactivedocument", "clearactivedocumentpatch":
+            return .discardStagedPatchForActiveDocument
         case "saveactivedocument":
             return .saveActiveDocument
         case "revertactivedocument", "reloadactivedocument":
@@ -112,6 +158,71 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
                 throw UIActionBusControlPlaneError.missingField("worktreeLabel")
             }
             return .focusWorktree(path: worktreePath, label: worktreeLabel)
+        case "sendworkerguidance", "messageworker":
+            guard let runId = required(runId, field: "runId") else {
+                throw UIActionBusControlPlaneError.missingField("runId")
+            }
+            guard let agentId = required(agentId, field: "agentId") else {
+                throw UIActionBusControlPlaneError.missingField("agentId")
+            }
+            guard let text = required(text, field: "text") else {
+                throw UIActionBusControlPlaneError.missingField("text")
+            }
+            return .sendWorkerGuidance(runId: runId, agentId: agentId, message: text)
+        case "retryworker":
+            guard let runId = required(runId, field: "runId") else {
+                throw UIActionBusControlPlaneError.missingField("runId")
+            }
+            guard let agentId = required(agentId, field: "agentId") else {
+                throw UIActionBusControlPlaneError.missingField("agentId")
+            }
+            return .retryWorker(runId: runId, agentId: agentId, dryRun: dryRun ?? false)
+        case "retaskworker":
+            guard let runId = required(runId, field: "runId") else {
+                throw UIActionBusControlPlaneError.missingField("runId")
+            }
+            guard let agentId = required(agentId, field: "agentId") else {
+                throw UIActionBusControlPlaneError.missingField("agentId")
+            }
+            guard let text = required(text, field: "text") else {
+                throw UIActionBusControlPlaneError.missingField("text")
+            }
+            return .retaskWorker(
+                runId: runId,
+                agentId: agentId,
+                taskSummary: text,
+                dryRun: dryRun ?? false
+            )
+        case "terminateworker":
+            guard let runId = required(runId, field: "runId") else {
+                throw UIActionBusControlPlaneError.missingField("runId")
+            }
+            guard let agentId = required(agentId, field: "agentId") else {
+                throw UIActionBusControlPlaneError.missingField("agentId")
+            }
+            return .terminateWorker(runId: runId, agentId: agentId, reason: required(reason ?? text, field: "reason"))
+        case "openproblemdocument":
+            return try resolvedProblemAction(.openDocument)
+        case "revealproblempanel":
+            return try resolvedProblemAction(.revealInspector)
+        case "focusproblemworktree":
+            return try resolvedProblemAction(.focusWorktree)
+        case "saveproblemdocument":
+            return try resolvedProblemAction(.saveDocument)
+        case "revertproblemdocument":
+            return try resolvedProblemAction(.revertDocument)
+        case "applyproblempatch":
+            return try resolvedProblemAction(.applyStagedPatch)
+        case "discardproblempatch":
+            return try resolvedProblemAction(.discardStagedPatch)
+        case "messageproblemworker", "sendguidancetoproblemworker":
+            return try resolvedProblemAction(.sendWorkerGuidance, text: required(text, field: "text"))
+        case "retryproblemworker":
+            return try resolvedProblemAction(.retryWorker, dryRun: dryRun ?? false)
+        case "retaskproblemworker":
+            return try resolvedProblemAction(.retaskWorker, text: required(text, field: "text"), dryRun: dryRun ?? false)
+        case "terminateproblemworker":
+            return try resolvedProblemAction(.terminateWorker, text: required(reason ?? text, field: "reason"))
         case "revealinspector":
             guard let panel, let resolved = IDEPanelTab.controlIdentifier(panel) else {
                 throw UIActionBusControlPlaneError.invalidValue(field: "panel", value: panel ?? "")
@@ -141,6 +252,22 @@ struct UIActionBusCommandEnvelope: Codable, Equatable, Identifiable {
         guard !trimmed.isEmpty else { return nil }
         _ = field
         return trimmed
+    }
+
+    private func resolvedProblemAction(
+        _ capability: IDEProblemActionCapability,
+        text: String? = nil,
+        dryRun: Bool = false
+    ) throws -> UIActionBusAction {
+        guard let problemId = required(problemId, field: "problemId") else {
+            throw UIActionBusControlPlaneError.missingField("problemId")
+        }
+        return .performProblemAction(
+            problemId: problemId,
+            capability: capability,
+            text: text,
+            dryRun: dryRun
+        )
     }
 }
 
@@ -250,7 +377,11 @@ final class UIActionBusControlPlane: ObservableObject {
         shell: AppShellState,
         workflow: WorkflowContextStore
     ) throws {
-        let snapshot = UIActionBus.snapshot(shell: shell, workflow: workflow)
+        let snapshot = UIActionBus.snapshot(
+            shell: shell,
+            workflow: workflow,
+            controlPlaneError: lastErrorMessage
+        )
         let data = try JSONEncoder.pretty.encode(snapshot)
         guard data != lastSnapshotData else { return }
         try data.write(to: snapshotURL, options: .atomic)
@@ -292,6 +423,7 @@ private extension ConsoleTab {
         case "freemodels": return .freeModels
         case "agents", "agenttaskbar": return .agentTaskBar
         case "agentanalytics": return .agentAnalytics
+        case "usage": return .usage
         case "terminal": return .terminal
         case "llmstudio": return .llmStudio
         case "dispatch": return .dispatch
@@ -306,10 +438,30 @@ private extension ConsoleTab {
     }
 }
 
+private extension IDEProblemActionCapability {
+    static func controlIdentifier(_ value: String) -> IDEProblemActionCapability? {
+        switch normalized(value) {
+        case "opendocument", "openproblemdocument": return .openDocument
+        case "revealinspector", "revealproblempanel": return .revealInspector
+        case "focusworktree", "focusproblemworktree": return .focusWorktree
+        case "savedocument", "saveactivedocument", "saveproblemdocument": return .saveDocument
+        case "revertdocument", "revertactivedocument", "reloadactivedocument", "revertproblemdocument": return .revertDocument
+        case "applystagedpatch", "applyproblempatch", "applyactivedocumentpatch": return .applyStagedPatch
+        case "discardstagedpatch", "discardproblempatch", "clearactivedocumentpatch": return .discardStagedPatch
+        case "sendworkerguidance", "messageworker", "messageproblemworker", "sendguidancetoproblemworker": return .sendWorkerGuidance
+        case "retryworker", "retryproblemworker": return .retryWorker
+        case "retaskworker", "retaskproblemworker": return .retaskWorker
+        case "terminateworker", "terminateproblemworker": return .terminateWorker
+        default: return nil
+        }
+    }
+}
+
 private extension IDEPanelTab {
     static func controlIdentifier(_ value: String) -> IDEPanelTab? {
         switch normalized(value) {
         case "explorer": return .explorer
+        case "problems", "problem": return .problems
         case "worktrees": return .worktrees
         case "context": return .context
         case "extensions": return .extensions

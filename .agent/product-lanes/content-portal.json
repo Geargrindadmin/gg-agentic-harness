@@ -1,0 +1,35 @@
+{
+  "id": "content-portal",
+  "name": "Content Portal",
+  "description": "Documentation or content site with structured navigation, searchable content, and maintainable publishing flow.",
+  "v1Mandatory": false,
+  "category": "content-web",
+  "allowedStacks": [
+    "mdx-docs-site",
+    "nextjs-app-router"
+  ],
+  "defaultStack": "mdx-docs-site",
+  "requiredCapabilities": [
+    "content-navigation",
+    "search-ready-structure",
+    "docs-rendering",
+    "maintainable-content-layout"
+  ],
+  "defaultPacks": [
+    "design-system",
+    "cms-content",
+    "observability"
+  ],
+  "allowedPacks": [
+    "design-system",
+    "cms-content",
+    "observability",
+    "notifications"
+  ],
+  "requiredGates": [
+    "typecheck",
+    "lint",
+    "docs-bundle",
+    "content-smoke"
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "version": 2,
+  "policy": {
+    "fixtureFirst": true,
+    "downstreamProofAfterFixturePass": true,
+    "firstDownstreamTarget": "GGV3"
+  },
+  "mandatoryLanes": [
+    "marketing-site",
+    "saas-dashboard",
+    "admin-panel"
+  ],
+  "unattendedV1Packs": [
+    "design-system",
+    "observability",
+    "auth-rbac"
+  ],
+  "cases": [
+    {
+      "id": "marketing-go-primary",
+      "workflow": "go",
+      "sourceType": "prompt",
+      "request": "Build an enterprise marketing site for a B2B AI automation company with pricing, case studies, and a contact funnel.",
+      "lane": "marketing-site",
+      "expectedPacks": [
+        "design-system",
+        "observability"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "marketing-create-demand-gen",
+      "workflow": "create",
+      "sourceType": "prompt",
+      "request": "Build a demand-generation marketing site for an AI workflow platform with product narrative sections, ROI proof, pricing tiers, and a high-conversion contact page.",
+      "lane": "marketing-site",
+      "expectedPacks": [
+        "design-system",
+        "observability"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "marketing-go-prd-launch",
+      "workflow": "go",
+      "sourceType": "prd",
+      "sourcePath": "evals/fixtures/marketing-site-launch-prd.md",
+      "lane": "marketing-site",
+      "expectedPacks": [
+        "design-system",
+        "observability"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "saas-go-primary",
+      "workflow": "go",
+      "sourceType": "prompt",
+      "request": "Build a SaaS dashboard for vendor analytics with RBAC, settings, alerting, and executive admin views.",
+      "lane": "saas-dashboard",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "saas-create-revops",
+      "workflow": "create",
+      "sourceType": "prompt",
+      "request": "Build a revenue-operations SaaS dashboard with authenticated navigation, reports, team settings, and role-aware access for finance and customer-success leaders.",
+      "lane": "saas-dashboard",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "saas-minion-normalized-growth",
+      "workflow": "minion",
+      "sourceType": "normalized",
+      "sourcePath": "evals/fixtures/saas-dashboard-growth.spec.json",
+      "lane": "saas-dashboard",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "admin-go-primary",
+      "workflow": "go",
+      "sourceType": "prompt",
+      "request": "Build an internal admin operations panel with audit views, incident controls, user moderation, and system status.",
+      "lane": "admin-panel",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "admin-minion-triage",
+      "workflow": "minion",
+      "sourceType": "prompt",
+      "request": "Build an admin triage panel for trust-and-safety operators with queue views, audit logs, incident handoff notes, and secure role-aware routes.",
+      "lane": "admin-panel",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "admin-go-prd-ops",
+      "workflow": "go",
+      "sourceType": "prd",
+      "sourcePath": "evals/fixtures/admin-panel-ops-prd.md",
+      "lane": "admin-panel",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "HANDOFF_READY"
+    },
+    {
+      "id": "unsupported-crud-negative",
+      "workflow": "go",
+      "sourceType": "prompt",
+      "request": "Build a generic CRUD shell for inventory management with list, detail, edit, and create flows.",
+      "lane": "crud-shell",
+      "expectedPacks": [
+        "design-system",
+        "observability"
+      ],
+      "deliveryTarget": "local-repo",
+      "expectedOutcome": "BLOCKED"
+    },
+    {
+      "id": "downstream-ggv3-proof",
+      "workflow": "go",
+      "sourceType": "prd",
+      "sourcePath": "docs/prd/PRD-HEADLESS-ONE-SHOT-PRODUCT-HARNESS.md",
+      "lane": "saas-dashboard",
+      "expectedPacks": [
+        "design-system",
+        "observability",
+        "auth-rbac"
+      ],
+      "deliveryTarget": "downstream-install",
+      "downstreamTarget": "GGV3",
+      "expectedOutcome": "HANDOFF_READY"
+    }
+  ]
+}

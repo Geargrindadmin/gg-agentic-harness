@@ -1,0 +1,41 @@
+{
+  "id": "admin-panel",
+  "name": "Admin Panel",
+  "description": "Internal admin and operations interface with audit-ready structure and operator workflows.",
+  "v1Mandatory": true,
+  "category": "internal-web-app",
+  "allowedStacks": [
+    "nextjs-app-router",
+    "vite-react-node"
+  ],
+  "defaultStack": "nextjs-app-router",
+  "requiredCapabilities": [
+    "rbac-ready-shell",
+    "audit-friendly-views",
+    "operational-controls",
+    "status-surfaces",
+    "typed-api-layer"
+  ],
+  "defaultPacks": [
+    "design-system",
+    "observability",
+    "auth-rbac",
+    "admin-ops"
+  ],
+  "allowedPacks": [
+    "design-system",
+    "observability",
+    "auth-rbac",
+    "admin-ops",
+    "notifications",
+    "compliance-baseline"
+  ],
+  "requiredGates": [
+    "typecheck",
+    "lint",
+    "targeted-tests",
+    "docs-bundle",
+    "ui-smoke",
+    "operational-smoke"
+  ]
+}

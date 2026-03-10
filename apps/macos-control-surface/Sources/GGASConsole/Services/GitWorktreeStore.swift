@@ -65,6 +65,17 @@ final class GitWorktreeStore: ObservableObject {
         }
     }
 
+    func summary(for path: String) -> GitWorktreeSummary? {
+        let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+        return groups.lazy
+            .flatMap(\.worktrees)
+            .first(where: { URL(fileURLWithPath: $0.path).standardizedFileURL.path == normalized })
+    }
+
+    func changedFiles(for path: String) -> [String] {
+        summary(for: path)?.changedFilesList ?? []
+    }
+
     private nonisolated static func loadGroups(projectRoot: String, statuses: [BusRunStatus]) throws -> [GitWorktreeGroup] {
         let rootURL = URL(fileURLWithPath: projectRoot).standardizedFileURL
         let worktrees = try parseWorktreeList(runGit(args: ["-C", projectRoot, "worktree", "list", "--porcelain"]), projectRoot: projectRoot)

@@ -158,6 +158,12 @@ struct TermTab: Identifiable {
     var args: [String]
 }
 
+enum TerminalSplitMode: String, Equatable {
+    case none
+    case right
+    case down
+}
+
 @MainActor
 final class TerminalSurfaceModel: ObservableObject {
     let launchDestination: TerminalLaunchDestination
@@ -165,6 +171,8 @@ final class TerminalSurfaceModel: ObservableObject {
 
     @Published var tabs: [TermTab] = []
     @Published var activeId: UUID?
+    @Published var secondaryActiveId: UUID?
+    @Published var splitMode: TerminalSplitMode = .none
     @Published var showLaunchProfile = false
 
     private var lastConsumedLaunchId: UUID?
@@ -228,8 +236,7 @@ final class TerminalSurfaceModel: ObservableObject {
         )
         let count = tabs.filter { $0.executable == exe }.count + 1
         let tab = TermTab(title: titleOverride ?? "agent \(count)", executable: exe, args: args)
-        tabs.append(tab)
-        activeId = tab.id
+        appendTab(tab)
     }
 
     func addZshTab(workingDirectory: String? = nil, titleOverride: String? = nil) {
@@ -239,8 +246,7 @@ final class TerminalSurfaceModel: ObservableObject {
             executable: "/bin/zsh",
             args: terminalShellArgs(for: "/bin/zsh", workingDirectory: workingDirectory)
         )
-        tabs.append(tab)
-        activeId = tab.id
+        appendTab(tab)
     }
 
     func addBashTab(workingDirectory: String? = nil, titleOverride: String? = nil) {
@@ -250,8 +256,7 @@ final class TerminalSurfaceModel: ObservableObject {
             executable: "/bin/bash",
             args: terminalShellArgs(for: "/bin/bash", workingDirectory: workingDirectory)
         )
-        tabs.append(tab)
-        activeId = tab.id
+        appendTab(tab)
     }
 
     func addTmuxTab(workingDirectory: String? = nil, titleOverride: String? = nil) {
@@ -268,8 +273,61 @@ final class TerminalSurfaceModel: ObservableObject {
             executable: tmux,
             args: args
         )
-        tabs.append(tab)
-        activeId = tab.id
+        appendTab(tab)
+    }
+
+    func activateSplit(
+        _ mode: TerminalSplitMode,
+        projectSettings: ProjectSettings
+    ) {
+        guard launchDestination == .workspaceDock else { return }
+        if tabs.isEmpty {
+            addZshTab()
+        }
+        guard let primary = activeId ?? tabs.first?.id else { return }
+
+        if splitMode == mode, secondaryActiveId != nil {
+            clearSplit()
+            return
+        }
+
+        if let secondary = secondaryActiveId,
+           secondary != primary,
+           tabs.contains(where: { $0.id == secondary }) {
+            splitMode = mode
+            return
+        }
+
+        if let existing = tabs.first(where: { $0.id != primary })?.id {
+            secondaryActiveId = existing
+            splitMode = mode
+            return
+        }
+
+        let previousPrimary = primary
+        addZshTab(
+            workingDirectory: nil,
+            titleOverride: "zsh • split"
+        )
+        let newSecondary = activeId
+        activeId = previousPrimary
+        secondaryActiveId = newSecondary
+        splitMode = mode
+    }
+
+    func clearSplit() {
+        splitMode = .none
+        secondaryActiveId = nil
+    }
+
+    func assignSecondaryTab(_ id: UUID) {
+        guard launchDestination == .workspaceDock else { return }
+        guard tabs.contains(where: { $0.id == id }) else { return }
+        guard id != activeId else { return }
+        secondaryActiveId = id
+        if splitMode == .none {
+            splitMode = .right
+        }
     }
 
     func removeTab(_ id: UUID) {
@@ -277,6 +335,36 @@ final class TerminalSurfaceModel: ObservableObject {
         tabs.removeAll { $0.id == id }
         if activeId == id {
             activeId = tabs.last?.id
+        }
+        if secondaryActiveId == id {
+            secondaryActiveId = tabs.first(where: { $0.id != activeId })?.id
+        }
+        normalizeSplitState()
+    }
+
+    private func appendTab(_ tab: TermTab) {
+        tabs.append(tab)
+        activeId = tab.id
+        normalizeSplitState()
+    }
+
+    private func normalizeSplitState() {
+        if let activeId, !tabs.contains(where: { $0.id == activeId }) {
+            self.activeId = tabs.first?.id
+        }
+
+        if let secondaryActiveId, !tabs.contains(where: { $0.id == secondaryActiveId }) {
+            self.secondaryActiveId = nil
+        }
+
+        if splitMode != .none {
+            guard let activeId,
+                  let secondaryActiveId,
+                  activeId != secondaryActiveId else {
+                splitMode = .none
+                self.secondaryActiveId = nil
+                return
+            }
         }
     }
 }
@@ -345,6 +433,28 @@ private struct TerminalSurfaceView: View {
             .menuStyle(.borderlessButton)
             .help("Open shell and runtime session options")
 
+            if model.launchDestination == .workspaceDock {
+                Divider()
+                    .frame(height: 18)
+                    .padding(.horizontal, 6)
+
+                splitButton("Split Right", systemImage: "rectangle.split.2x1", mode: .right)
+                splitButton("Split Down", systemImage: "rectangle.split.1x2", mode: .down)
+
+                if model.splitMode != .none {
+                    Button {
+                        model.clearSplit()
+                    } label: {
+                        Image(systemName: "rectangle.compress.vertical")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close terminal split")
+                }
+            }
+
             if showsLaunchProfileControl {
                 Button {
                     model.showLaunchProfile = true
@@ -383,7 +493,13 @@ private struct TerminalSurfaceView: View {
     @ViewBuilder
     private func tabPill(_ t: TermTab) -> some View {
         let active = t.id == model.activeId
+        let isSecondary = t.id == model.secondaryActiveId
         HStack(spacing: 5) {
+            if active || isSecondary {
+                Text(active ? "1" : "2")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(active ? .green : .orange)
+            }
             Text(t.title)
                 .font(.system(size: 11, weight: active ? .semibold : .regular, design: .monospaced))
                 .foregroundStyle(active ? .white : .secondary)
@@ -402,13 +518,34 @@ private struct TerminalSurfaceView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { model.activeId = t.id }
+        .contextMenu {
+            if model.launchDestination == .workspaceDock {
+                Button("Use as Primary Pane") {
+                    model.activeId = t.id
+                }
+                Button("Use as Secondary Pane") {
+                    model.assignSecondaryTab(t.id)
+                }
+                if model.splitMode != .none {
+                    Button("Close Split") {
+                        model.clearSplit()
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Content
 
     @ViewBuilder
     private var tabContent: some View {
-        if let t = model.tabs.first(where: { $0.id == model.activeId }) {
+        if model.splitMode != .none,
+           let primary = model.tabs.first(where: { $0.id == model.activeId }),
+           let secondaryId = model.secondaryActiveId,
+           let secondary = model.tabs.first(where: { $0.id == secondaryId }),
+           primary.id != secondary.id {
+            splitContent(primary: primary, secondary: secondary)
+        } else if let t = model.tabs.first(where: { $0.id == model.activeId }) {
             EmbeddedTerminal(tabId: t.id, executable: t.executable, args: t.args)
         } else {
             ZStack {
@@ -418,6 +555,58 @@ private struct TerminalSurfaceView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    @ViewBuilder
+    private func splitContent(primary: TermTab, secondary: TermTab) -> some View {
+        Group {
+            if model.splitMode == .right {
+                HStack(spacing: 0) {
+                    splitPane(primary, paneLabel: "Primary")
+                    Divider()
+                    splitPane(secondary, paneLabel: "Secondary")
+                }
+            } else {
+                VStack(spacing: 0) {
+                    splitPane(primary, paneLabel: "Primary")
+                    Divider()
+                    splitPane(secondary, paneLabel: "Secondary")
+                }
+            }
+        }
+    }
+
+    private func splitPane(_ tab: TermTab, paneLabel: String) -> some View {
+        ZStack(alignment: .topLeading) {
+            EmbeddedTerminal(tabId: tab.id, executable: tab.executable, args: tab.args)
+            Text("\(paneLabel) · \(tab.title)")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.06))
+                )
+                .padding(8)
+        }
+    }
+
+    private func splitButton(_ title: String, systemImage: String, mode: TerminalSplitMode) -> some View {
+        Button {
+            model.activateSplit(mode, projectSettings: projectSettings)
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(model.splitMode == mode ? .primary : .secondary)
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(model.splitMode == mode ? Color.white.opacity(0.10) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(title)
     }
 }
 
@@ -433,6 +622,7 @@ struct TerminalTabView: View {
             showsLaunchProfileControl: true,
             emptyStateText: "Open a shell session to start working"
         )
+        .navigationTitle("Terminal")
     }
 }
 
@@ -470,7 +660,7 @@ struct IDETerminalCollapsedBar: View {
             }
 
             Button("Terminal Page") {
-                shell.selectedTab = .terminal
+                shell.selectTab(.terminal)
             }
             .buttonStyle(.plain)
             .font(.system(size: 11, weight: .medium))
@@ -591,7 +781,7 @@ struct IDETerminalDockView: View {
             }
 
             Button("Terminal Page") {
-                shell.selectedTab = .terminal
+                shell.selectTab(.terminal)
             }
             .buttonStyle(.plain)
             .font(.system(size: 11, weight: .medium))

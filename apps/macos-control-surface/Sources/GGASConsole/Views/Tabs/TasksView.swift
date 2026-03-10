@@ -271,7 +271,7 @@ struct TasksView: View {
             Spacer()
 
             Button("Open Swarm") {
-                shell.selectedTab = .swarm
+                shell.selectTab(.swarm)
             }
             .buttonStyle(.bordered)
             .disabled(workflow.selectedRunId == nil)
@@ -585,7 +585,7 @@ struct TasksView: View {
             updated.runtime = coordinator.active?.label ?? run?.coordinatorModel ?? run?.coordinator ?? updated.runtime
             try await forge.updateTask(updated)
             workflow.select(task: updated)
-            shell.selectedTab = .swarm
+            shell.selectTab(.swarm)
         } catch {
             launchError = error.localizedDescription
         }

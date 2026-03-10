@@ -58,6 +58,8 @@ node /absolute/path/to/gg-agentic-harness/packages/gg-cli/dist/index.js --projec
 npm run harness:runtime-parity
 npm run harness:persona:audit
 npm run harness:persona:benchmark
+node /absolute/path/to/gg-agentic-harness/packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo harness settings get
+node /absolute/path/to/gg-agentic-harness/packages/gg-cli/dist/index.js --project-root /absolute/path/to/target-repo harness diagram --format json
 npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer
 node scripts/persona-registry-resolve.mjs --prompt "document a portable harness rollout" --classification TASK --json
 ```
@@ -75,8 +77,11 @@ node scripts/persona-registry-resolve.mjs --prompt "document a portable harness 
 - `copy` mode is safer for long-lived divergence.
 - Generated `PORTABLE_AGENTIC_SETUP.md` inside target includes exact next steps.
 - `portable verify` exercises prompt mirrors, package scripts, persona benchmark coverage, project-context freshness, and runtime parity structure before you trust a new install.
+- `portable verify` now also checks headless harness settings creation and the dynamic user diagram artifact.
 - `portable verify` warns when the codex runtime adapter has not been activated for the target repo on the current machine.
 - `workflow run` has executable adapters for `go`, `paperclip-extracted`, `prompt-improver`, `symphony-lite`, `visual-explainer`, `full-doc-update`, and `hydra-sidecar`.
 - `CodeGraphContext` pilot mode requires the upstream `cgc` CLI on the host if you want live graph-backed context instead of the standard fallback path.
 - The verified smoke for that path is `npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer`, which should emit `contextSource: codegraphcontext` or `contextSource: hybrid`.
 - Portable installs now include `.agent/agents/`, `.agent/registry/persona-registry.json`, and `.agent/registry/persona-compounds.json` so new projects inherit deterministic persona routing on day one.
+- Portable installs now create `.agent/control-plane/server/harness-settings.json` automatically and ship `docs/architecture/agentic-harness-dynamic-user-diagram.html`.
+- In `copy` mode, the installer copies only portable harness assets and avoids transient `.agent/control-plane` runtime state from the source machine.

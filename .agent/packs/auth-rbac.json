@@ -1,0 +1,26 @@
+{
+  "id": "auth-rbac",
+  "name": "Auth and RBAC",
+  "description": "Adds authenticated shells, role-aware routing, permission boundaries, and protected workflow structure.",
+  "v1Unattended": true,
+  "riskTier": "medium",
+  "compatibleLanes": [
+    "saas-dashboard",
+    "admin-panel",
+    "crud-shell"
+  ],
+  "requiredConfig": [
+    "auth-provider",
+    "session-strategy"
+  ],
+  "addsCapabilities": [
+    "authenticated-shell",
+    "role-aware-routes",
+    "permission-boundaries"
+  ],
+  "requiredGates": [
+    "targeted-tests",
+    "api-contract-smoke"
+  ],
+  "reviewRequired": true
+}

@@ -172,6 +172,7 @@ struct SwarmView: View {
     // Delegate ALL polling to AgentMonitorService — this view is display-only (Phase 2)
     @ObservedObject private var monitor   = AgentMonitorService.shared
     @ObservedObject private var swarmModel = AgentSwarmModel.shared
+    @ObservedObject private var worktreeStore = GitWorktreeStore.shared
     @EnvironmentObject private var shell: AppShellState
     @EnvironmentObject private var workflow: WorkflowContextStore
     @State private var currentSizes = SwarmSizes.base
@@ -842,6 +843,28 @@ struct SwarmView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
 
+                    Button("Open Changed") {
+                        openChangedFiles(
+                            runId: selected.runId,
+                            agentId: selected.agentId,
+                            worktreePath: selected.worker.worktreePath
+                                ?? "\(ProjectSettings.shared.projectRoot)/.agent/control-plane/worktrees/\(selected.runId)/\(selected.agentId)"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button("Dock Shell") {
+                        dockShell(
+                            runId: selected.runId,
+                            agentId: selected.agentId,
+                            worktreePath: selected.worker.worktreePath
+                                ?? "\(ProjectSettings.shared.projectRoot)/.agent/control-plane/worktrees/\(selected.runId)/\(selected.agentId)"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
                     Button("View Worktree") {
                         WorktreePanelController.shared.open(
                             agentId: selected.agentId,
@@ -983,7 +1006,40 @@ struct SwarmView: View {
             agentId: agentId,
             providedPath: node.worktreePath
         )
-        WorktreePanelController.shared.open(agentId: agentId, worktreePath: worktreePath)
+        openChangedFiles(runId: node.runId, agentId: agentId, worktreePath: worktreePath)
+    }
+
+    private func openChangedFiles(runId: String?, agentId: String, worktreePath: String) {
+        Task {
+            await worktreeStore.refresh(projectRoot: ProjectSettings.shared.projectRoot)
+            let changedFiles = worktreeStore.changedFiles(for: worktreePath)
+            if changedFiles.isEmpty {
+                WorktreePanelController.shared.open(agentId: agentId, worktreePath: worktreePath)
+                return
+            }
+
+            shell.focusWorktree(path: worktreePath, label: agentId)
+            for file in changedFiles.prefix(8) {
+                UIActionBus.perform(
+                    .openDocument(path: file, sourceLabel: runId.map { "Run \($0) · \(agentId)" } ?? agentId),
+                    shell: shell,
+                    workflow: workflow
+                )
+            }
+        }
+    }
+
+    private func dockShell(runId: String?, agentId: String, worktreePath: String) {
+        UIActionBus.perform(
+            .launchTerminal(
+                preset: .zsh,
+                workingDirectory: worktreePath,
+                title: "zsh • \(runId.map { "\($0) · " } ?? "")\(agentId)",
+                destination: .workspaceDock
+            ),
+            shell: shell,
+            workflow: workflow
+        )
     }
 
     private func resolvedWorktreePath(runId: String?, agentId: String, providedPath: String?) -> String {
@@ -1197,7 +1253,7 @@ private struct SwarmDotView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .help("Open worktree for \(agentId.isEmpty ? nodeId : agentId)")
+                    .help("Open changed files for \(agentId.isEmpty ? nodeId : agentId)")
                 }
             }
         }
@@ -1430,7 +1486,7 @@ private struct TopologyNodeView: View {
                                 .background(Capsule().fill(Color.white.opacity(0.06)))
                         }
                         .buttonStyle(.plain)
-                        .help("Open worktree")
+                        .help("Open changed files")
                     }
                 }
             }
@@ -1453,7 +1509,7 @@ private struct TopologyNodeView: View {
                 Button("Open Live Console", action: onOpenConsole)
             }
             if let onOpenFiles {
-                Button("Open Worktree", action: onOpenFiles)
+                Button("Open Changed Files", action: onOpenFiles)
             }
         }
         .onAppear {

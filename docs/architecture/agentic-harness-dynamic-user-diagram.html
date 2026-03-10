@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GG Agentic Harness - Live System Diagram</title>
+  <style>
+    :root {
+      --bg: #07111a;
+      --panel: rgba(17, 28, 43, 0.9);
+      --panel-soft: rgba(28, 42, 62, 0.86);
+      --line: rgba(132, 180, 214, 0.28);
+      --text: #eef6ff;
+      --muted: #9cb6cd;
+      --blue: #78d2ff;
+      --green: #8fe6ba;
+      --gold: #f2cc7b;
+      --rose: #ff9f92;
+      --teal: #76e0d5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1000px 560px at 110% -10%, rgba(47, 86, 122, 0.34), transparent 60%),
+        radial-gradient(900px 520px at -10% 110%, rgba(31, 76, 109, 0.28), transparent 58%),
+        linear-gradient(180deg, #08121d 0%, #071019 100%);
+    }
+
+    .wrap {
+      max-width: 1640px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .hero,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+    }
+
+    .hero {
+      padding: 24px;
+      margin-bottom: 16px;
+      background:
+        linear-gradient(145deg, rgba(18, 31, 48, 0.96), rgba(13, 23, 36, 0.92)),
+        var(--panel);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      letter-spacing: 0.01em;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      max-width: 960px;
+    }
+
+    .banner {
+      margin-top: 16px;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 13px;
+      border: 1px solid rgba(242, 204, 123, 0.35);
+      background: rgba(89, 70, 25, 0.22);
+      color: #ffe6a8;
+      display: none;
+    }
+
+    .banner.offline {
+      display: block;
+    }
+
+    .chips,
+    .metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .chip,
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(10, 18, 30, 0.7);
+      color: var(--muted);
+      padding: 7px 12px;
+      font-size: 12px;
+    }
+
+    .metric strong {
+      color: var(--text);
+      margin-left: 6px;
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      padding: 16px;
+    }
+
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .stage {
+      position: relative;
+      border-radius: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      min-height: 210px;
+    }
+
+    .stage::after {
+      content: "->";
+      position: absolute;
+      top: 16px;
+      right: -14px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .stage:last-child::after {
+      display: none;
+    }
+
+    .eyebrow {
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .stage h3,
+    .runtime-card h3,
+    .policy-card h3 {
+      margin: 8px 0 10px;
+      font-size: 15px;
+    }
+
+    .stage ul,
+    .runtime-card ul,
+    .policy-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .runtime-grid,
+    .policy-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .runtime-card,
+    .policy-card,
+    .summary-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-soft);
+      padding: 14px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .summary-card .value {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 8px 0 4px;
+    }
+
+    .summary-card .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .accent-blue { color: var(--blue); }
+    .accent-green { color: var(--green); }
+    .accent-gold { color: var(--gold); }
+    .accent-rose { color: var(--rose); }
+    .accent-teal { color: var(--teal); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(132, 180, 214, 0.18);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    code {
+      color: #d4e8ff;
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(8, 15, 25, 0.72);
+      border: 1px solid var(--line);
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--rose);
+    }
+
+    .dot.live { background: var(--green); }
+    .dot.warn { background: var(--gold); }
+
+    @media (max-width: 1380px) {
+      .grid,
+      .flow,
+      .summary-grid,
+      .runtime-grid,
+      .policy-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stage::after {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Dynamic Diagram</div>
+      <h1>GG Agentic Harness Live System View</h1>
+      <p class="sub">
+        This diagram stays readable as a static explainer, but it hydrates itself from the harness control plane when live data is available.
+        It is designed for end users: what the harness is doing now, which policies are active, and where the main control points live.
+      </p>
+      <div class="chips">
+        <span class="chip">Headless source of truth: <code>.agent/control-plane/server/harness-settings.json</code></span>
+        <span class="chip">Live payload: <code>/api/harness/diagram</code></span>
+        <span class="chip">Optional UI: macOS control surface</span>
+      </div>
+      <div class="metrics" id="hero-metrics">
+        <span class="metric">Control Plane<strong id="metric-control-plane">Checking</strong></span>
+        <span class="metric">Loop Budget<strong id="metric-loop-budget">50</strong></span>
+        <span class="metric">Retry Budget<strong id="metric-retry-budget">3</strong></span>
+        <span class="metric">Refresh<strong id="metric-refresh">15s</strong></span>
+      </div>
+      <div class="banner" id="offline-banner">
+        Live data is unavailable. You are seeing the static architecture layer only. Start the control plane to populate current runs, runtimes, and settings.
+      </div>
+    </section>
+
+    <div class="grid">
+      <div class="stack">
+        <section class="panel">
+          <h2>Operational Flow</h2>
+          <div class="meta">The harness still follows the same five-step shape when the app is absent. The app just makes these settings visible and editable.</div>
+          <div class="flow">
+            <article class="stage">
+              <div class="eyebrow">Stage 1</div>
+              <h3>Intake and Priming</h3>
+              <ul>
+                <li>Request is classified and normalized.</li>
+                <li>Runtime profile, project context, and memory are loaded.</li>
+                <li>Prompt improver and context source policy shape the run.</li>
+              </ul>
+            </article>
+            <article class="stage">
+              <div class="eyebrow">Stage 2</div>
+              <h3>Governance and Routing</h3>
+              <ul>
+                <li>Board path activates for high-risk or architecture work.</li>
+                <li>Persona routing resolves coordinator and worker roles.</li>
+                <li>Dispatch plan decides runtime mix and worker fanout.</li>
+              </ul>
+            </article>
+            <article class="stage">
+              <div class="eyebrow">Stage 3</div>
+              <h3>Execution Engine</h3>
+              <ul>
+                <li>Coordinator launches the swarm and owns the run graph.</li>
+                <li>Workers inherit a harness system prompt plus active policy.</li>
+                <li>Loop budget and retry budget are included in that contract.</li>
+              </ul>
+            </article>
+            <article class="stage">
+              <div class="eyebrow">Stage 4</div>
+              <h3>Verification and Docs</h3>
+              <ul>
+                <li>Validation mode controls which checks are expected.</li>
+                <li>Doc sync mode controls whether docs are expected inline.</li>
+                <li>Results are written to run state, logs, and artifacts.</li>
+              </ul>
+            </article>
+            <article class="stage">
+              <div class="eyebrow">Stage 5</div>
+              <h3>Feedback Hardening</h3>
+              <ul>
+                <li>Recurring failures become evidence, not silent retries.</li>
+                <li>Governor limits shape safe worker capacity.</li>
+                <li>Portable installs can verify parity and settings headlessly.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Live Activity</h2>
+          <div class="meta">Current control-plane state across runs, workers, and runtimes.</div>
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="label">Running Runs</div>
+              <div class="value accent-blue" id="running-runs">0</div>
+              <div class="label">Accepted or active orchestration flows</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Active Workers</div>
+              <div class="value accent-green" id="active-workers">0</div>
+              <div class="label">Queued, spawning, or running agents</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Pending Messages</div>
+              <div class="value accent-gold" id="pending-messages">0</div>
+              <div class="label">Bus traffic still waiting on acknowledgment</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Allowed Workers</div>
+              <div class="value accent-teal" id="allowed-workers">0</div>
+              <div class="label">Governor capacity based on current machine state</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Recent Runs</h2>
+          <div class="meta">Most recent runs known to the control plane.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Run</th>
+                <th>Status</th>
+                <th>Coordinator</th>
+                <th>Worker Backend</th>
+                <th>Task</th>
+              </tr>
+            </thead>
+            <tbody id="recent-runs">
+              <tr>
+                <td colspan="5" class="meta">Waiting for control-plane data.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="panel">
+          <h2>Runtime Plane</h2>
+          <div class="meta">Which runtimes are reachable, what they are using, and how much live load they are carrying.</div>
+          <div class="runtime-grid" id="runtime-grid"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Active Harness Policy</h2>
+          <div class="meta">These are the settings that now live in the headless harness and can be adjusted from the app when installed.</div>
+          <div class="policy-grid">
+            <div class="policy-card">
+              <div class="eyebrow">Execution</div>
+              <h3>Loop and Retry Policy</h3>
+              <ul id="execution-policy">
+                <li>Loop budget: 50</li>
+                <li>Retry limit: 3</li>
+                <li>Retry backoff: 1, 2, 4 seconds</li>
+              </ul>
+            </div>
+            <div class="policy-card">
+              <div class="eyebrow">Prompt</div>
+              <h3>Prompt Harness Modes</h3>
+              <ul id="prompt-policy">
+                <li>Prompt improver: auto</li>
+                <li>Context source: standard</li>
+                <li>Hydra mode: off</li>
+                <li>Validate mode: none</li>
+                <li>Doc sync mode: auto</li>
+              </ul>
+            </div>
+            <div class="policy-card">
+              <div class="eyebrow">Governor</div>
+              <h3>Machine Limits</h3>
+              <ul id="governor-policy">
+                <li>CPU high threshold: env/default</li>
+                <li>CPU low threshold: env/default</li>
+                <li>Reserved RAM: env/default</li>
+                <li>Per-agent overhead: env/default</li>
+              </ul>
+            </div>
+            <div class="policy-card">
+              <div class="eyebrow">Artifact</div>
+              <h3>Run Metadata Defaults</h3>
+              <ul id="artifact-policy">
+                <li>Prompt version: unset</li>
+                <li>Workflow version: unset</li>
+                <li>Blueprint version: unset</li>
+                <li>Tool bundle: unset</li>
+                <li>Risk tier: unset</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const controlPlaneBase = params.get("controlPlane") || "http://127.0.0.1:7891";
+    const offlineBanner = document.getElementById("offline-banner");
+
+    function setText(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.textContent = String(value);
+      }
+    }
+
+    function renderList(id, lines) {
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.innerHTML = lines.map((line) => "<li>" + line + "</li>").join("");
+    }
+
+    function formatOverride(value, suffix) {
+      if (value === null || value === undefined || value === "") {
+        return "env/default";
+      }
+      return suffix ? value + " " + suffix : String(value);
+    }
+
+    function renderRuntimeGrid(discoveries, status) {
+      const grid = document.getElementById("runtime-grid");
+      if (!grid) return;
+
+      const runtimeMap = {
+        codex: status.codex,
+        claude: status.claude,
+        kimi: status.kimi
+      };
+
+      grid.innerHTML = discoveries.map((entry) => {
+        const runtime = runtimeMap[entry.runtime] || {};
+        const live = Boolean(runtime.available);
+        const active = runtime.runningAcp || 0;
+        const preferredTransport = entry.preferredTransport || "unknown";
+        const path = runtime.path || entry.binaryPath || "not detected";
+        return `
+          <article class="runtime-card">
+            <div class="eyebrow">${entry.runtime}</div>
+            <h3>${entry.label || entry.runtime}</h3>
+            <div class="meta">
+              <span class="pill"><span class="dot ${live ? "live" : "warn"}"></span>${live ? "available" : "degraded"}</span>
+            </div>
+            <ul>
+              <li>Transport: ${preferredTransport}</li>
+              <li>Path or adapter: ${path}</li>
+              <li>Authenticated: ${entry.authenticated ? "yes" : "no"}</li>
+              <li>Active workers: ${active}</li>
+            </ul>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderRecentRuns(runs) {
+      const body = document.getElementById("recent-runs");
+      if (!body) return;
+      if (!runs.length) {
+        body.innerHTML = '<tr><td colspan="5" class="meta">No runs recorded yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = runs.map((run) => `
+        <tr>
+          <td><code>${run.runId}</code></td>
+          <td>${run.status}</td>
+          <td>${run.coordinator || "-"}</td>
+          <td>${run.workerBackend || "-"}</td>
+          <td>${run.task}</td>
+        </tr>
+      `).join("");
+    }
+
+    function applyPayload(payload) {
+      offlineBanner.classList.remove("offline");
+      setText("metric-control-plane", "Live");
+      setText("metric-loop-budget", payload.settings.execution.loopBudget);
+      setText("metric-retry-budget", payload.settings.execution.retryLimit);
+      setText("metric-refresh", payload.diagram.autoRefreshSeconds + "s");
+      setText("running-runs", payload.live.activity.runningRuns);
+      setText("active-workers", payload.live.activity.activeWorkers);
+      setText("pending-messages", payload.live.activity.pendingMessages);
+      setText("allowed-workers", payload.live.status.governor.allowedAgents);
+
+      renderList("execution-policy", [
+        "Loop budget: " + payload.settings.execution.loopBudget,
+        "Retry limit: " + payload.settings.execution.retryLimit,
+        "Retry backoff: " + payload.settings.execution.retryBackoffSeconds.join(", ") + " seconds"
+      ]);
+
+      renderList("prompt-policy", [
+        "Prompt improver: " + payload.settings.execution.promptImproverMode,
+        "Context source: " + payload.settings.execution.contextSource,
+        "Hydra mode: " + payload.settings.execution.hydraMode,
+        "Validate mode: " + payload.settings.execution.validateMode,
+        "Doc sync mode: " + payload.settings.execution.docSyncMode
+      ]);
+
+      renderList("governor-policy", [
+        "CPU high threshold: " + formatOverride(payload.settings.governor.cpuHighPct, "%"),
+        "CPU low threshold: " + formatOverride(payload.settings.governor.cpuLowPct, "%"),
+        "Reserved RAM: " + formatOverride(payload.settings.governor.reservedRamGb, "GB"),
+        "Per-agent overhead: " + formatOverride(payload.settings.governor.perAgentOverheadGb, "GB"),
+        "Model VRAM reserve: " + formatOverride(payload.settings.governor.modelVramGb, "GB")
+      ]);
+
+      renderList("artifact-policy", [
+        "Prompt version: " + (payload.settings.artifacts.promptVersion || "unset"),
+        "Workflow version: " + (payload.settings.artifacts.workflowVersion || "unset"),
+        "Blueprint version: " + (payload.settings.artifacts.blueprintVersion || "unset"),
+        "Tool bundle: " + (payload.settings.artifacts.toolBundle || "unset"),
+        "Risk tier: " + (payload.settings.artifacts.riskTier || "unset")
+      ]);
+
+      renderRuntimeGrid(payload.live.runtimeDiscovery.discoveries || [], payload.live.status);
+      renderRecentRuns(payload.live.recentRuns || []);
+    }
+
+    async function loadPayload() {
+      try {
+        const response = await fetch(controlPlaneBase + "/api/harness/diagram", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+        const payload = await response.json();
+        applyPayload(payload);
+        const refreshMs = Math.max(5000, Number(payload.diagram.autoRefreshSeconds || 15) * 1000);
+        window.clearTimeout(window.__ggHarnessRefresh);
+        window.__ggHarnessRefresh = window.setTimeout(loadPayload, refreshMs);
+      } catch (error) {
+        setText("metric-control-plane", "Offline");
+        offlineBanner.classList.add("offline");
+        window.clearTimeout(window.__ggHarnessRefresh);
+        window.__ggHarnessRefresh = window.setTimeout(loadPayload, 15000);
+      }
+    }
+
+    loadPayload();
+  </script>
+</body>
+</html>

@@ -75,6 +75,41 @@ test('createRunState and spawnWorker persist run topology with built-in persona 
   });
 });
 
+test('spawnWorker injects the active harness execution policy into the launch contract', () => {
+  withProjectRoot((root) => {
+    orchestrator.createRunState(root, {
+      runId: 'run-test-policy',
+      summary: 'policy prompt smoke',
+      classification: 'TASK',
+      coordinatorRuntime: 'codex'
+    });
+
+    const spawned = orchestrator.spawnWorker(root, {
+      runId: 'run-test-policy',
+      runtime: 'kimi',
+      agentId: 'builder-1',
+      role: 'builder',
+      taskSummary: 'Implement the headless harness settings flow',
+      persona: orchestrator.buildPersonaPacket(root, 'backend-specialist'),
+      harnessPolicy: {
+        loopBudget: 24,
+        retryLimit: 2,
+        retryBackoffSeconds: [1, 3],
+        promptImproverMode: 'force',
+        contextSource: 'hybrid',
+        hydraMode: 'shadow',
+        validateMode: 'all',
+        docSyncMode: 'off'
+      }
+    });
+
+    assert.equal(spawned.worker.harnessPolicy.loopBudget, 24);
+    assert.equal(spawned.worker.launchSpec.requestBody.messages[0].role, 'system');
+    assert.match(spawned.worker.launchSpec.requestBody.messages[0].content, /Loop budget: 24/);
+    assert.match(spawned.worker.launchSpec.requestBody.messages[0].content, /Prompt improver mode: force/);
+  });
+});
+
 test('delegateTask enforces board approval for high-risk tasks and spawns after approval', () => {
   withProjectRoot((root) => {
     orchestrator.createRunState(root, {

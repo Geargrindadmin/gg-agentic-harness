@@ -1,0 +1,25 @@
+{
+  "id": "design-system",
+  "name": "Design System",
+  "description": "Applies shared UI tokens, component patterns, accessibility baseline, and consistent visual structure.",
+  "v1Unattended": true,
+  "riskTier": "low",
+  "compatibleLanes": [
+    "marketing-site",
+    "saas-dashboard",
+    "admin-panel",
+    "crud-shell",
+    "content-portal"
+  ],
+  "requiredConfig": [],
+  "addsCapabilities": [
+    "ui-tokens",
+    "component-patterns",
+    "a11y-baseline"
+  ],
+  "requiredGates": [
+    "ui-smoke",
+    "a11y-smoke"
+  ],
+  "reviewRequired": false
+}

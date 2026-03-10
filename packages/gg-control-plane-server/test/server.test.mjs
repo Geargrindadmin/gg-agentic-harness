@@ -132,6 +132,44 @@ test('planner task CRUD and integration settings round-trip', async () => {
   assert.ok(Array.isArray(mcpCatalog.servers));
 });
 
+test('harness settings and dynamic diagram endpoints round-trip', async () => {
+  const settings = await getJson('/api/harness/settings');
+  assert.equal(settings.execution.loopBudget, 50);
+  assert.equal(settings.execution.retryLimit, 3);
+
+  const updated = await requestJson('/api/harness/settings', {
+    method: 'PUT',
+    body: {
+      ...settings,
+      execution: {
+        ...settings.execution,
+        loopBudget: 18,
+        retryLimit: 2,
+        promptImproverMode: 'force',
+        hydraMode: 'shadow'
+      },
+      governor: {
+        ...settings.governor,
+        cpuHighPct: 91
+      }
+    }
+  });
+  assert.equal(updated.statusCode, 200);
+  assert.equal(updated.payload.execution.loopBudget, 18);
+  assert.equal(updated.payload.governor.cpuHighPct, 91);
+
+  const diagram = await getJson('/api/harness/diagram');
+  assert.equal(diagram.settings.execution.loopBudget, 18);
+  assert.equal(typeof diagram.live.activity.totalRuns, 'number');
+  assert.match(diagram.diagram.artifactRelativePath, /agentic-harness-dynamic-user-diagram\.html$/);
+
+  const reset = await requestJson('/api/harness/settings/reset', {
+    method: 'POST'
+  });
+  assert.equal(reset.statusCode, 200);
+  assert.equal(reset.payload.execution.loopBudget, 50);
+});
+
 test('dry-run task dispatch creates run, bus state, and worktree browsing surface', async () => {
   const dispatch = await requestJson('/api/task', {
     method: 'POST',

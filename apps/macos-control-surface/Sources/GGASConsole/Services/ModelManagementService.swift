@@ -180,7 +180,9 @@ final class ModelManagementService: ObservableObject {
 
     private func deleteViaREST(id: String, endpoint: String) async -> Bool {
         let base = endpoint.isEmpty ? "http://localhost:1234" : endpoint
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: allowed) ?? id
         guard let url = URL(string: "\(base)/api/v0/models/\(encoded)") else { return false }
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"

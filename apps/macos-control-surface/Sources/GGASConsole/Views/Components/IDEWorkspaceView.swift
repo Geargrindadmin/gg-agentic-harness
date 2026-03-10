@@ -174,6 +174,12 @@ private struct RightInspectorRail: View {
                 gitWorktreesRootPath: gitWorktreesRootPath,
                 selectedRunRootPath: selectedRunRootPath
             )
+        case .problems:
+            IDEProblemsView(
+                activeDocument: activeDocument,
+                workspaceRootPath: workspaceRootPath,
+                selectedRunRootPath: selectedRunRootPath
+            )
         case .worktrees:
             IDEWorktreesView(workspaceRootPath: workspaceRootPath)
         case .context:
@@ -366,9 +372,539 @@ private struct IDEExplorerView: View {
     }
 }
 
+private struct IDEProblemsView: View {
+    let activeDocument: IDEDocumentContext?
+    let workspaceRootPath: String
+    let selectedRunRootPath: String?
+
+    var body: some View {
+        if let activeDocument {
+            IDEProblemsDocumentContent(
+                activeDocument: activeDocument,
+                activeSession: DocumentSessionStore.shared.session(
+                    path: activeDocument.path,
+                    sourceLabel: activeDocument.sourceLabel,
+                    workspaceRootPath: workspaceRootPath,
+                    selectedRunRootPath: selectedRunRootPath
+                )
+            )
+            .id("problems:\(activeDocument.id):\(selectedRunRootPath ?? "none")")
+        } else {
+            IDEProblemsOverviewContent()
+        }
+    }
+}
+
+private struct IDEProblemsDocumentContent: View {
+    @EnvironmentObject private var shell: AppShellState
+    @EnvironmentObject private var workflow: WorkflowContextStore
+    @EnvironmentObject private var controlPlane: UIActionBusControlPlane
+    @ObservedObject private var monitor = AgentMonitorService.shared
+    @ObservedObject private var explorerStore = WorkspaceExplorerStore.shared
+    @ObservedObject private var worktreeStore = GitWorktreeStore.shared
+
+    let activeDocument: IDEDocumentContext
+    @ObservedObject var activeSession: DocumentViewerStore
+
+    private var problems: [IDEProblem] {
+        let selectedRunStatus = workflow.selectedRunId.flatMap { runId in
+            monitor.busStatuses.first(where: { $0.runId == runId })
+        }
+        return IDEProblemCollector.collect(
+            activeDocument: activeDocument,
+            activeSession: activeSession,
+            selectedRunId: workflow.selectedRunId,
+            selectedRunStatus: selectedRunStatus,
+            monitorLastError: monitor.lastError,
+            controlPlaneLastError: controlPlane.lastErrorMessage,
+            explorerError: explorerStore.error,
+            worktreeError: worktreeStore.error
+        )
+    }
+
+    var body: some View {
+        IDEProblemsListBody(problems: problems)
+    }
+}
+
+private struct IDEProblemsOverviewContent: View {
+    @EnvironmentObject private var shell: AppShellState
+    @EnvironmentObject private var workflow: WorkflowContextStore
+    @EnvironmentObject private var controlPlane: UIActionBusControlPlane
+    @ObservedObject private var monitor = AgentMonitorService.shared
+    @ObservedObject private var explorerStore = WorkspaceExplorerStore.shared
+    @ObservedObject private var worktreeStore = GitWorktreeStore.shared
+
+    private var problems: [IDEProblem] {
+        let selectedRunStatus = workflow.selectedRunId.flatMap { runId in
+            monitor.busStatuses.first(where: { $0.runId == runId })
+        }
+        return IDEProblemCollector.collect(
+            activeDocument: nil,
+            activeSession: nil,
+            selectedRunId: workflow.selectedRunId,
+            selectedRunStatus: selectedRunStatus,
+            monitorLastError: monitor.lastError,
+            controlPlaneLastError: controlPlane.lastErrorMessage,
+            explorerError: explorerStore.error,
+            worktreeError: worktreeStore.error
+        )
+    }
+
+    var body: some View {
+        IDEProblemsListBody(problems: problems)
+    }
+}
+
+private struct IDEProblemsListBody: View {
+    @EnvironmentObject private var shell: AppShellState
+    @EnvironmentObject private var workflow: WorkflowContextStore
+    @State private var guidanceText = ""
+    @State private var retaskText = ""
+    @State private var actionStatus: String?
+
+    let problems: [IDEProblem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Divider()
+            if problems.isEmpty {
+                Spacer()
+                Text("No active IDE problems in the current context.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(problems) { problem in
+                            problemCard(problem)
+                        }
+                    }
+                    .padding(12)
+                }
+                if let selectedProblem {
+                    Divider()
+                    VStack(spacing: 0) {
+                        quickActionPanel(for: selectedProblem)
+                        if hasWorkerControls(selectedProblem) {
+                            Divider()
+                            workerActionPanel(for: selectedProblem)
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            syncProblemSelection()
+            syncDrafts()
+        }
+        .onChange(of: problems.map(\.id)) { _, _ in
+            syncProblemSelection()
+            syncDrafts()
+        }
+        .onChange(of: shell.selectedProblemId) { _, _ in
+            syncDrafts()
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Problems")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                severitySummary
+            }
+            Text("Active document state, selected run failures, locks, and shell-control errors are aggregated here for user and agent repair loops.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+    }
+
+    private var severitySummary: some View {
+        let errors = problems.filter { $0.severity == .error }.count
+        let warnings = problems.filter { $0.severity == .warning }.count
+        return HStack(spacing: 6) {
+            if errors > 0 {
+                problemCountBadge(value: errors, color: Color(red: 1.0, green: 0.35, blue: 0.30))
+            }
+            if warnings > 0 {
+                problemCountBadge(value: warnings, color: Color(red: 0.94, green: 0.72, blue: 0.18))
+            }
+            if errors == 0 && warnings == 0 {
+                problemCountBadge(value: problems.count, color: .secondary)
+            }
+        }
+    }
+
+    private func problemCountBadge(value: Int, color: Color) -> some View {
+        Text("\(value)")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.12))
+            )
+    }
+
+    private func problemCard(_ problem: IDEProblem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Circle()
+                    .fill(severityColor(problem.severity))
+                    .frame(width: 9, height: 9)
+                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(problem.title)
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(problem.message)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Text(problem.severity.rawValue.capitalized)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(severityColor(problem.severity))
+            }
+
+            if let path = problem.path {
+                Text(path)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+
+            HStack(spacing: 6) {
+                if let runId = problem.runId {
+                    problemTag(runId)
+                }
+                if let agentId = problem.agentId {
+                    problemTag(agentId)
+                }
+            }
+
+            HStack(spacing: 10) {
+                if problem.supports(.openDocument), problem.path != nil {
+                    Button("Open") {
+                        triggerProblemAction(problem, capability: .openDocument, successMessage: nil)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let runId = problem.runId, runId != workflow.selectedRunId {
+                    Button("Select Run") {
+                        UIActionBus.perform(
+                            .selectRun(runId: runId, title: nil, runtime: nil),
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                if problem.supports(.focusWorktree), problem.worktreePath != nil {
+                    Button("Focus Worktree") {
+                        triggerProblemAction(problem, capability: .focusWorktree, successMessage: nil)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if problem.supports(.revealInspector), let panel = problem.panel, panel != shell.idePanelTab {
+                    Button("Show Panel") {
+                        triggerProblemAction(problem, capability: .revealInspector, successMessage: nil)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 10, weight: .medium))
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected(problem) ? Color.white.opacity(0.08) : Color.white.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isSelected(problem) ? Color.white.opacity(0.16) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture {
+            UIActionBus.perform(.selectProblem(id: problem.id), shell: shell, workflow: workflow)
+        }
+    }
+
+    private func severityColor(_ severity: IDEProblemSeverity) -> Color {
+        switch severity {
+        case .error:
+            return Color(red: 1.0, green: 0.35, blue: 0.30)
+        case .warning:
+            return Color(red: 0.94, green: 0.72, blue: 0.18)
+        case .info:
+            return Color(red: 0.20, green: 0.75, blue: 1.00)
+        }
+    }
+
+    private func problemTag(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 9, weight: .medium))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.06))
+            )
+    }
+
+    private var selectedProblem: IDEProblem? {
+        if let selectedProblemId = shell.selectedProblemId,
+           let selected = problems.first(where: { $0.id == selectedProblemId }) {
+            return selected
+        }
+        return problems.first
+    }
+
+    private func isSelected(_ problem: IDEProblem) -> Bool {
+        problem.id == selectedProblem?.id
+    }
+
+    private func syncProblemSelection() {
+        guard !problems.isEmpty else {
+            if shell.selectedProblemId != nil {
+                shell.selectedProblemId = nil
+            }
+            return
+        }
+
+        if let selectedProblemId = shell.selectedProblemId,
+           problems.contains(where: { $0.id == selectedProblemId }) {
+            return
+        }
+
+        shell.selectedProblemId = problems.first?.id
+    }
+
+    private func syncDrafts() {
+        guard let selectedProblem else {
+            guidanceText = ""
+            retaskText = ""
+            actionStatus = nil
+            return
+        }
+
+        retaskText = selectedProblem.message
+        guidanceText = ""
+        actionStatus = nil
+    }
+
+    @ViewBuilder
+    private func quickActionPanel(for problem: IDEProblem) -> some View {
+        let quickActions = quickActionButtons(for: problem)
+        if !quickActions.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Quick Actions")
+                        .font(.system(size: 11, weight: .semibold))
+                    Spacer()
+                    if let statusMessage = actionStatus, !statusMessage.isEmpty {
+                        Text(statusMessage)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+
+                FlowLayout(spacing: 8) {
+                    ForEach(quickActions, id: \.title) { action in
+                        Button(action.title) {
+                            triggerProblemAction(
+                                problem,
+                                capability: action.capability,
+                                successMessage: action.successMessage
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    @ViewBuilder
+    private func workerActionPanel(for problem: IDEProblem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Worker Controls")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("\(problem.workerTarget?.runId ?? problem.runId ?? "run") · \(problem.workerTarget?.agentId ?? problem.agentId ?? "worker")")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let statusMessage = actionStatus, !statusMessage.isEmpty {
+                    Text(statusMessage)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            CommandTextEditor(
+                text: $guidanceText,
+                placeholder: "Guidance for the selected worker…",
+                font: .systemFont(ofSize: 11)
+            )
+            .frame(minHeight: 56, maxHeight: 84)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
+            )
+
+            CommandTextEditor(
+                text: $retaskText,
+                placeholder: "Retask summary…",
+                font: .systemFont(ofSize: 11)
+            )
+            .frame(minHeight: 56, maxHeight: 84)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.16), lineWidth: 0.8)
+            )
+
+            HStack(spacing: 8) {
+                Button("Send Guidance") {
+                    triggerProblemAction(
+                        problem,
+                        capability: .sendWorkerGuidance,
+                        text: guidanceText,
+                        successMessage: "Guidance sent"
+                    ) {
+                        guidanceText = ""
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(
+                    !problem.supports(.sendWorkerGuidance) ||
+                    guidanceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+
+                Button("Retask + Retry") {
+                    triggerProblemAction(
+                        problem,
+                        capability: .retaskWorker,
+                        text: retaskText,
+                        successMessage: "Worker retasked"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .disabled(
+                    !problem.supports(.retaskWorker) ||
+                    retaskText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+            }
+
+            HStack(spacing: 8) {
+                Button("Retry Worker") {
+                    triggerProblemAction(problem, capability: .retryWorker, successMessage: "Worker retry queued")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!problem.supports(.retryWorker))
+
+                Button("Terminate Worker") {
+                    triggerProblemAction(
+                        problem,
+                        capability: .terminateWorker,
+                        text: "Terminated from Problems rail",
+                        successMessage: "Worker terminated"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(!problem.supports(.terminateWorker))
+            }
+        }
+        .padding(12)
+    }
+
+    private func hasWorkerControls(_ problem: IDEProblem) -> Bool {
+        problem.supports(.sendWorkerGuidance) ||
+        problem.supports(.retryWorker) ||
+        problem.supports(.retaskWorker) ||
+        problem.supports(.terminateWorker)
+    }
+
+    private func triggerProblemAction(
+        _ problem: IDEProblem,
+        capability: IDEProblemActionCapability,
+        text: String? = nil,
+        successMessage: String?,
+        onSuccess: (() -> Void)? = nil
+    ) {
+        Task {
+            do {
+                try await UIActionBus.performAsync(
+                    .performProblemAction(
+                        problemId: problem.id,
+                        capability: capability,
+                        text: text,
+                        dryRun: false
+                    ),
+                    shell: shell,
+                    workflow: workflow
+                )
+                actionStatus = successMessage
+                onSuccess?()
+            } catch {
+                actionStatus = error.localizedDescription
+            }
+        }
+    }
+
+    private func quickActionButtons(for problem: IDEProblem) -> [ProblemQuickAction] {
+        var actions: [ProblemQuickAction] = []
+        if problem.supports(.openDocument) {
+            actions.append(.init(title: "Open File", capability: .openDocument, successMessage: nil))
+        }
+        if problem.supports(.saveDocument) {
+            actions.append(.init(title: "Save Draft", capability: .saveDocument, successMessage: "Document saved"))
+        }
+        if problem.supports(.revertDocument) {
+            actions.append(.init(title: "Revert Draft", capability: .revertDocument, successMessage: "Draft reverted"))
+        }
+        if problem.supports(.applyStagedPatch) {
+            actions.append(.init(title: "Apply Patch", capability: .applyStagedPatch, successMessage: "Patch applied"))
+        }
+        if problem.supports(.discardStagedPatch) {
+            actions.append(.init(title: "Discard Patch", capability: .discardStagedPatch, successMessage: "Patch discarded"))
+        }
+        if problem.supports(.focusWorktree) {
+            actions.append(.init(title: "Focus Worktree", capability: .focusWorktree, successMessage: nil))
+        }
+        if problem.supports(.revealInspector) {
+            actions.append(.init(title: "Show Source", capability: .revealInspector, successMessage: nil))
+        }
+        return actions
+    }
+}
+
+private struct ProblemQuickAction {
+    let title: String
+    let capability: IDEProblemActionCapability
+    let successMessage: String?
+}
+
 private struct IDEContextView: View {
     @EnvironmentObject private var workflow: WorkflowContextStore
     @EnvironmentObject private var controlPlane: UIActionBusControlPlane
+    @EnvironmentObject private var rpcService: UIActionBusRPCService
 
     let activeDocument: IDEDocumentContext?
     let selectedRunRootPath: String?
@@ -403,9 +939,16 @@ private struct IDEContextView: View {
                 contextCard(title: "UI Control") {
                     contextRow("Commands", controlPlane.commandsDirectoryURL.path)
                     contextRow("Snapshot", controlPlane.snapshotURL.path)
+                    contextRow("RPC Endpoint", rpcService.endpointDescription)
+                    contextRow("RPC Status", rpcService.isRunning ? "Listening" : "Stopped")
                     contextRow("Last Command", controlPlane.lastProcessedCommandId ?? "None yet")
                     if let lastError = controlPlane.lastErrorMessage, !lastError.isEmpty {
                         Text(lastError)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    if let rpcError = rpcService.lastErrorMessage, !rpcError.isEmpty {
+                        Text(rpcError)
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                     }
@@ -811,6 +1354,17 @@ private struct IDEDocumentView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
+            if store.hasStagedPatch {
+                Text("Patch Ready")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.20, green: 0.75, blue: 1.00))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color(red: 0.20, green: 0.75, blue: 1.00).opacity(0.12))
+                    )
+            }
             if store.isDirty {
                 Text("Unsaved")
                     .font(.system(size: 10, weight: .semibold))
@@ -830,7 +1384,7 @@ private struct IDEDocumentView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: store.isMarkdown ? 250 : 170)
+                .frame(width: modePickerWidth)
             }
             if let related = store.relatedDocument {
                 Button(related.label) {
@@ -842,6 +1396,25 @@ private struct IDEDocumentView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+            }
+            if store.hasStagedPatch {
+                Button("Discard Patch") {
+                    UIActionBus.perform(.discardStagedPatchForActiveDocument, shell: shell, workflow: workflow)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                Button("Apply Patch") {
+                    Task {
+                        try? await UIActionBus.performAsync(
+                            .applyStagedPatchToActiveDocument,
+                            shell: shell,
+                            workflow: workflow
+                        )
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(store.isEditable ? .primary : .secondary)
+                .disabled(!store.isEditable)
             }
             Button("Revert") {
                 Task {
@@ -910,6 +1483,8 @@ private struct IDEDocumentView: View {
                 }
                 .padding(24)
             }
+        } else if store.mode == .patch && store.hasStagedPatch {
+            patchReviewView
         } else if store.mode == .preview && store.isMarkdown {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -939,6 +1514,41 @@ private struct IDEDocumentView: View {
                 }
                 .padding(24)
             }
+        }
+    }
+
+    private var patchReviewView: some View {
+        ScrollView([.vertical, .horizontal]) {
+            VStack(alignment: .leading, spacing: 18) {
+                patchBanner
+                if let error = store.stagedPatchError, !error.isEmpty {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Staged Patch")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(store.stagedPatch)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Patched Result")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(store.stagedPatchPreviewContent)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(24)
         }
     }
 
@@ -985,5 +1595,24 @@ private struct IDEDocumentView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(red: 0.20, green: 0.75, blue: 1.00).opacity(0.12))
             )
+    }
+
+    private var patchBanner: some View {
+        Text("Review the staged patch before applying it to the editable buffer. Save still writes the resulting draft to disk.")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(Color(red: 0.20, green: 0.75, blue: 1.00))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(red: 0.20, green: 0.75, blue: 1.00).opacity(0.12))
+            )
+    }
+
+    private var modePickerWidth: CGFloat {
+        if store.hasStagedPatch {
+            return 330
+        }
+        return store.isMarkdown ? 250 : 170
     }
 }
