@@ -178,6 +178,20 @@ Operational notes:
 3. The harness still controls spawning, retasking, and termination even when the worker itself is running with an autonomous flag.
 4. For controlled local smoke tests on constrained machines, the headless governor can be tuned with `HARNESS_RESERVED_RAM_GB=<value>` without changing the default production safety formula.
 
+## Control Plane Environment Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `GG_COORDINATOR_RUNTIME` | Hard-pin coordinator runtime | `codex`, `claude`, or `kimi` |
+| `GG_COORDINATOR_PREFERENCE` | Preference order for auto-selection | `codex,claude,kimi` (default) |
+| `GG_CODEX_TRANSPORT` | Override Codex transport | `background-terminal` |
+| `GG_CLAUDE_TRANSPORT` | Override Claude transport | `background-terminal` |
+| `GG_KIMI_TRANSPORT` | Override Kimi transport | `cli-session` or `api-session` |
+| `CODEX_BINARY` | Path to Codex CLI binary | `/usr/local/bin/codex` |
+| `CLAUDE_BINARY` | Path to Claude CLI binary | `/usr/local/bin/claude` |
+| `KIMI_BINARY` | Path to Kimi CLI binary | `/usr/local/bin/kimi` |
+| `HARNESS_RESERVED_RAM_GB` | Tune headless governor for constrained machines | `4` |
+
 ## Validation
 
 Run `node scripts/harness-lint.mjs` to verify:
@@ -187,3 +201,5 @@ Run `node scripts/harness-lint.mjs` to verify:
 - runtime docs reference the same MCP registry and artifact contracts shipped by the harness.
 
 Run `npm run harness:runtime:status` to confirm the current machine/runtime adapter status for the repo you are working in.
+
+Run `npm run harness:runtime-parity` to verify runtime parity across codex, claude, and kimi adapters.

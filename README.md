@@ -42,6 +42,7 @@ Current scope:
 - swarm steering, run/bus status, worktree browsing, and hardware-governed queueing are wired into the harness-native server
 - sub-agents get dedicated worktrees under `.agent/control-plane/worktrees/<runId>/<agentId>`
 - Kimi remains harness-controlled: it can request delegation, but the harness owns spawn/terminate policy
+- structured worker markers (`@@GG_MSG`, `@@GG_STATE`) enable real-time harness parsing of worker output
 
 ## Architecture diagram
 
@@ -115,6 +116,8 @@ Or local installer script:
 
 ## Key commands
 
+### Workflow commands
+
 ```bash
 npm run gg -- skills list
 npm run gg -- workflow list
@@ -126,13 +129,43 @@ npm run gg -- workflow run visual-explainer "subject" --mode diff-review --evide
 npm run gg -- workflow run full-doc-update "task summary"
 npm run gg -- workflow run hydra-sidecar "evaluate auth hardening route" --hydra-mode shadow --internet-evidence "OWASP ASVS 2025-01-15,https://owasp.org/www-project-application-security-verification-standard/"
 npm run gg -- workflow show network-ai-pilot
+```
+
+### Runtime and control plane commands
+
+```bash
 npm run harness:runtime:status
 npm run harness:runtime:activate
+npm run harness:runtime-parity
 npm run control-plane:start
 npm run harness:persona:audit
 npm run harness:persona:benchmark
-npm run harness:runtime-parity
 node scripts/persona-registry-resolve.mjs --prompt "ship auth hardening" --classification TASK --json
+```
+
+### Multi-model orchestration commands (NEW)
+
+```bash
+# Create a new run with coordinator selection
+gg run create --summary "Implement feature X" --classification TASK --coordinator auto
+
+# Spawn a worker for a run
+gg worker spawn --run-id <runId> --runtime kimi --role builder --persona builder-1
+
+# Delegate a task to another runtime
+gg worker delegate --run-id <runId> --from coordinator-1 --to-runtime kimi --role builder --task "Implement API endpoint"
+
+# Check worker inbox
+gg bus inbox --run-id <runId> --agent-id worker-1
+
+# Watch run status
+gg run watch <runId>
+
+# List active runs
+gg run list
+
+# Terminate a worker
+gg worker terminate --run-id <runId> --agent-id worker-1
 ```
 
 ## Runtime activation
@@ -177,3 +210,15 @@ Auth discovery order:
 - `codex`: `~/.codex/auth.json` -> `OPENAI_API_KEY`
 - `claude`: `~/.claude/.credentials.json` -> `~/.local/share/opencode/auth.json` -> `ANTHROPIC_API_KEY`
 - `kimi`: `~/.kimi/credentials/kimi-code.json` -> `~/.kimi/config.toml` -> `MOONSHOT_API_KEY|KIMI_API_KEY`
+
+## Multi-Model Control Plane
+
+The harness now includes a native multi-model control plane that enables one runtime to delegate work to another under explicit policy:
+
+- **Run Registry**: Tracks runs, workers, and parent-child relationships
+- **Message Bus**: Mailbox-style communication with directed messages and acknowledgements
+- **Runtime Adapters**: Unified interface for `codex`, `claude`, and `kimi`
+- **Delegation Policy**: Governance-based approval for worker spawning
+- **Run Artifacts**: Record delegation decisions and runtime routing evidence
+
+See `docs/prd/PRD-MULTI-MODEL-CONTROL-PLANE.md` for the full specification and `docs/agentic-harness.md` for operational details.

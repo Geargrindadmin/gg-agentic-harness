@@ -1,6 +1,6 @@
 # GGV3 Agentic Harness — Authoritative Node Configuration
 
-> **Version:** 1.3 | **Date:** 2026-03-07  
+> **Version:** 1.4 | **Date:** 2026-03-09  
 > **Purpose:** Canonical reference for all 8 agentic layer nodes.  
 > Referenced by: `/minion`, `/go`, `conductor-orchestrator`, all specialist agents.
 
@@ -14,7 +14,7 @@
 | 2   | Agent Sandbox               | Warm DevBox Pool       | Git Worktrees + `agent-factory` + `parallel-dispatch`                                   |
 | 3A  | Agent Harness (Antigravity) | Goose fork             | `conductor-orchestrator` + native parallel agents — Claude is sole coordinator          |
 | 3B  | Agent Harness (Claude CLI)  | Goose fork             | `conductor-orchestrator` + Claude agent teams concurrently                              |
-| 3.5 | Swarm Bridge (Optional)     | _(GGV3 addition)_      | Optional bridge-only transports. Default profile uses native coordinator + agent teams.  |
+| 3.5 | Multi-Model Control Plane   | _(GGV3 addition)_      | `gg-orchestrator` + `gg-runtime-adapters` — harness-native worker spawn, delegation, and mailbox bus |
 | 4   | Blueprint Engine            | Blueprint              | 5-Cycle Engine + Evaluate-Loop                                                          |
 | 5   | Rules / Context             | Rules files            | `GEMINI.md`, `CLAUDE.md`, `.agent/rules/*.md`, `docs/project-context.md`                 |
 | 5.5 | Memory Layer                | Session Observation DB | `claude-mem` + SQLite + Chroma + 4 MCP tools (`search`, `timeline`, `get_observations`) |
@@ -281,24 +281,86 @@ Minimum required evidence:
 
 ---
 
-## IDE Mode Switching (Node 3 — NEW in v1.1)
+## Multi-Model Control Plane (Node 3.5 — NEW in v1.4)
 
-Two parallelism modes selected by `.agent-mode` (written by `setup.sh` at install time):
+The harness now provides a first-class multi-model orchestration layer. The active coordinator runtime can request work from another runtime under explicit policy, with deterministic traceability, bounded authority, and shared validation semantics.
 
-```bash
-AGENT_MODE=$(cat .agent-mode 2>/dev/null || echo "antigravity")
+### Control Plane Packages
+
+| Package | Purpose | Location |
+|---------|---------|----------|
+| `gg-orchestrator` | Run registry, worker lifecycle, delegation policy, message bus | `packages/gg-orchestrator` |
+| `gg-runtime-adapters` | Runtime adapter interface for `codex`, `claude`, `kimi` | `packages/gg-runtime-adapters` |
+| `gg-control-plane-server` | Headless HTTP control plane for external clients | `packages/gg-control-plane-server` |
+
+### Runtime Adapter Contract
+
+Each runtime adapter implements:
+
+```ts
+interface RuntimeAdapter {
+  id: 'codex' | 'claude' | 'kimi';
+  spawnWorker(input: SpawnWorkerInput): Promise<SpawnedWorker>;
+  sendMessage(input: SendMessageInput): Promise<void>;
+  fetchInbox(input: FetchInboxInput): Promise<BusMessage[]>;
+  acknowledgeMessage(input: AckMessageInput): Promise<void>;
+  getWorkerStatus(input: WorkerStatusInput): Promise<WorkerStatus>;
+  terminateWorker(input: TerminateWorkerInput): Promise<void>;
+  listCapabilities(): RuntimeCapabilities;
+}
 ```
 
-| Mode          | Trigger                                                     | Strategy                                                 |
-| ------------- | ----------------------------------------------------------- | -------------------------------------------------------- |
-| `antigravity` | `ANTHROPIC_BASE_URL=localhost` in `~/.claude/settings.json` | Claude = sole coordinator, native parallel agents        |
-| `claude-cli`  | Claude CLI + `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`    | Claude agent teams concurrently                          |
+### Launch Transport Modes
 
-**Flag location:** `~/.claude/settings.json` → `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`  
-**Configured by:** `kit/setup.sh` (interactive prompt + auto-detection)  
-**Runtime use:** `/minion` NODE 3 reads `.agent-mode` before dispatching parallelism
+| Runtime | Transport | Mode | Autonomous Flag |
+|---------|-----------|------|-----------------|
+| `codex` | `background-terminal` | `host-activated` | `--dangerously-bypass-approvals-and-sandbox` |
+| `claude` | `background-terminal` | `host-activated` | `--dangerously-skip-permissions` |
+| `kimi` | `cli-session` | `host-activated` | `--yolo` |
+| `kimi` | `api-session` | `provider-api` | N/A (API-based) |
 
-### Hard Rules (both modes)
+### Worker Lifecycle
+
+1. **Create Run**: `createRun` establishes a run context with coordinator runtime selection
+2. **Spawn Worker**: `spawnWorker` creates a worker record with persona, role, and launch spec
+3. **Delegate Task**: `delegateTask` evaluates governance policy before approving child workers
+4. **Execute**: `executeWorker` runs preflight checks and launches the runtime adapter
+5. **Message Bus**: Workers communicate via mailbox-style bus with directed messages and acks
+6. **Terminate**: Workers emit `@@GG_STATE` markers; harness controls spawn/terminate policy
+
+### Structured Worker Markers
+
+Workers emit these markers for real-time harness parsing:
+
+```text
+@@GG_MSG {"type":"PROGRESS","body":"Completed API scaffold"}
+@@GG_MSG {"type":"BLOCKED","body":"Missing schema decision","requiresAck":true}
+@@GG_MSG {"type":"DELEGATE_REQUEST","body":"Need specialist","payload":{"requestedRuntime":"kimi","requestedRole":"builder","personaId":"..."}}
+@@GG_STATE {"status":"handoff_ready","summary":"Ready for review"}
+@@GG_STATE {"status":"blocked","reason":"Need credential from coordinator"}
+```
+
+### Delegation Policy
+
+Delegation decisions are policy-based and recorded in run artifacts:
+
+| Scenario | Policy |
+|----------|--------|
+| Task role = `builder`, risk = `low/medium`, parallelizable | Approve delegation to `kimi` |
+| Task role = `coordinator` or `reviewer` | Retain with active runtime |
+| Risk tier = `high` or touches `auth/payments/secrets` | Require board approval |
+| Runtime parity check fails | Reject with rationale |
+
+### Coordinator Selection
+
+The coordinator runtime supports both harness-driven and operator-pinned selection:
+
+1. `Auto` (default): harness selects from authenticated runtimes in preference order
+2. `Pinned`: operator selects `codex`, `claude`, or `kimi` explicitly
+3. Selection respects `GG_COORDINATOR_RUNTIME` and `GG_COORDINATOR_PREFERENCE` environment variables
+4. Auto-selection prefers authenticated local CLI sessions before provider-backed API transport
+
+### Hard Rules (all modes)
 
 - `auth`, `payments`, `escrow`, `KYC`: active runtime handles directly, but board approval and reviewer evidence are mandatory
 - Persona registry and compound registry govern all specialist dispatch: run `node scripts/persona-registry-audit.mjs` and `node scripts/persona-registry-resolve.mjs --prompt "<task>" --classification <...> --json` before fanout
@@ -306,6 +368,7 @@ AGENT_MODE=$(cat .agent-mode 2>/dev/null || echo "antigravity")
 - If resolver returns `compoundPersona`, use that compound's primary/collaborators as the effective dispatch contract and record it in the run artifact
 - Workers never push — always emit `HANDOFF_READY`, coordinator reviews + pushes
 - File-Claim Protocol active at all levels
+- Only the harness may spawn children — workers can request delegation but cannot autonomously spawn
 
 ---
 
