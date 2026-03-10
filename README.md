@@ -11,37 +11,55 @@ Portable agentic harness extracted from GGV3.
 - `.agent` skills/workflows/rules/templates plus persona files and registries
 - Harness scripts for run artifacts, persona routing, runtime parity, feedback loops, context generation, and Obsidian logging
 
-## macOS control surface
+## Multi-Model Control Plane
 
-The harness now carries a native SwiftUI macOS app at `apps/macos-control-surface`.
+The harness now runs a headless control-plane server with multi-model coordinator support.
 
-Headless control plane:
+### Headless Control Plane
 
 ```bash
 npm run control-plane:build
 npm run control-plane:start
 ```
 
-Build it with:
+### macOS Control Surface (Optional)
+
+The harness includes a native SwiftUI macOS app at `apps/macos-control-surface`:
 
 ```bash
 npm run macos:control-surface:build
-```
-
-Run it with:
-
-```bash
 npm run macos:control-surface:run
 ```
 
-Current scope:
+### Control Plane Features
 
-- the harness now exposes a native headless control-plane server at `packages/gg-control-plane-server`
-- the macOS app is an optional client over the same HTTP control plane
-- coordinator runtime selection is `Auto` by default, with explicit `Codex`, `Claude`, and `Kimi` pinning available in the dispatch surface
-- swarm steering, run/bus status, worktree browsing, and hardware-governed queueing are wired into the harness-native server
-- sub-agents get dedicated worktrees under `.agent/control-plane/worktrees/<runId>/<agentId>`
-- Kimi remains harness-controlled: it can request delegation, but the harness owns spawn/terminate policy
+- **Run Registry**: Create, list, and inspect runs with full worker graph visibility
+- **Worker Lifecycle**: Spawn, launch, terminate, retry, and retask workers
+- **Swarm Steering**: Send guidance, escalate, and request child delegation
+- **Message Bus**: Inbox, post, acknowledge, and event streaming
+- **Worktree Manager**: Per-agent worktrees at `.agent/control-plane/worktrees/<runId>/<agentId>/`
+- **Resource Governor**: Hardware-aware spawn limits with safe capacity calculation
+- **Integration Settings**: MCP catalog and quality jobs
+
+### Coordinator Selection
+
+| Mode | Behavior |
+|------|----------|
+| `Auto` (default) | Selects from authenticated runtimes in preference order |
+| `Pinned` | Explicit `codex`, `claude`, or `kimi` selection |
+
+Environment variables:
+- `GG_COORDINATOR_RUNTIME=codex|claude|kimi` — hard-pin the coordinator
+- `GG_COORDINATOR_PREFERENCE=codex,claude,kimi` — preference order (default)
+
+Auth discovery:
+- **Codex**: `~/.codex/auth.json` → `OPENAI_API_KEY`
+- **Claude**: `~/.claude/.credentials.json` → `~/.local/share/opencode/auth.json` → `ANTHROPIC_API_KEY`
+- **Kimi**: `~/.kimi/credentials/kimi-code.json` → `~/.kimi/config.toml` → `MOONSHOT_API_KEY|KIMI_API_KEY`
+
+### Key Principle
+
+The harness remains the sole control plane. Runtimes (`codex`, `claude`, `kimi`) act as execution adapters only. Kimi may request additional workers, but the harness owns all spawn/terminate decisions.
 
 ## Architecture diagram
 
@@ -113,11 +131,16 @@ Or local installer script:
 ./scripts/install-from-github.sh /absolute/path/to/target-repo symlink
 ```
 
-## Key commands
+## Key Commands
+
+### CLI and Workflows
 
 ```bash
+# List available capabilities
 npm run gg -- skills list
 npm run gg -- workflow list
+
+# Workflow execution
 npm run gg -- workflow run go "ship auth hardening" --prompt-improver auto
 npm run gg -- workflow run paperclip-extracted "objective"
 npm run gg -- workflow run prompt-improver "fix the login bug"
@@ -126,13 +149,48 @@ npm run gg -- workflow run visual-explainer "subject" --mode diff-review --evide
 npm run gg -- workflow run full-doc-update "task summary"
 npm run gg -- workflow run hydra-sidecar "evaluate auth hardening route" --hydra-mode shadow --internet-evidence "OWASP ASVS 2025-01-15,https://owasp.org/www-project-application-security-verification-standard/"
 npm run gg -- workflow show network-ai-pilot
-npm run harness:runtime:status
-npm run harness:runtime:activate
-npm run control-plane:start
-npm run harness:persona:audit
-npm run harness:persona:benchmark
-npm run harness:runtime-parity
+```
+
+### Runtime and Control Plane
+
+```bash
+# Runtime adapter management
+npm run harness:runtime:activate    # Activate default runtime (codex)
+npm run harness:runtime:status      # Check runtime adapter status
+npm run harness:runtime-parity      # Verify cross-runtime parity
+
+# Control plane
+npm run control-plane:build         # Build headless control plane
+npm run control-plane:start         # Start headless control plane server
+npm run control-plane:dev           # Build and start in one command
+
+# macOS control surface (optional)
+npm run macos:control-surface:build
+npm run macos:control-surface:run
+```
+
+### Persona and Registry
+
+```bash
+npm run harness:persona:audit       # Validate persona registry
+npm run harness:persona:benchmark   # Benchmark persona routing
+npm run harness:persona:sync        # Sync persona files with registry
+
+# Resolve personas for a task
 node scripts/persona-registry-resolve.mjs --prompt "ship auth hardening" --classification TASK --json
+
+# Resolve with compound persona detection
+node scripts/persona-registry-resolve.mjs --prompt "implement oauth login" --classification CRITICAL --json
+```
+
+### Validation and Diagnostics
+
+```bash
+npm run gg -- doctor                # Run harness doctor
+npm run gg -- --json doctor         # JSON output for automation
+npm run harness:lint                # Run harness lint
+npm run harness:project-context     # Regenerate project context
+npm run harness:project-context:check  # Check context freshness
 ```
 
 ## Runtime activation

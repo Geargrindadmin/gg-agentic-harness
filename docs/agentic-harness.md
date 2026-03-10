@@ -1,6 +1,6 @@
 # GGV3 Agentic Harness — Authoritative Node Configuration
 
-> **Version:** 1.3 | **Date:** 2026-03-07  
+> **Version:** 1.4 | **Date:** 2026-03-09  
 > **Purpose:** Canonical reference for all 8 agentic layer nodes.  
 > Referenced by: `/minion`, `/go`, `conductor-orchestrator`, all specialist agents.
 
@@ -12,8 +12,8 @@
 | --- | --------------------------- | ---------------------- | --------------------------------------------------------------------------------------- |
 | 1   | Entry Points                | CLI / Web / Slack      | `/go`, `/minion`, GearBox UI                                                             |
 | 2   | Agent Sandbox               | Warm DevBox Pool       | Git Worktrees + `agent-factory` + `parallel-dispatch`                                   |
-| 3A  | Agent Harness (Antigravity) | Goose fork             | `conductor-orchestrator` + native parallel agents — Claude is sole coordinator          |
-| 3B  | Agent Harness (Claude CLI)  | Goose fork             | `conductor-orchestrator` + Claude agent teams concurrently                              |
+| 3A  | Agent Harness (Multi-Model) | Control Plane          | `gg-control-plane-server` + multi-model coordinator — runtime-agnostic with `codex`, `claude`, `kimi` support |
+| 3B  | Agent Harness (Legacy)      | Goose fork             | Legacy `conductor-orchestrator` — preserved for compatibility                           |
 | 3.5 | Swarm Bridge (Optional)     | _(GGV3 addition)_      | Optional bridge-only transports. Default profile uses native coordinator + agent teams.  |
 | 4   | Blueprint Engine            | Blueprint              | 5-Cycle Engine + Evaluate-Loop                                                          |
 | 5   | Rules / Context             | Rules files            | `GEMINI.md`, `CLAUDE.md`, `.agent/rules/*.md`, `docs/project-context.md`                 |
