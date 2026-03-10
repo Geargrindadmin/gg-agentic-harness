@@ -80,3 +80,11 @@ node scripts/persona-registry-resolve.mjs --prompt "document a portable harness 
 - `CodeGraphContext` pilot mode requires the upstream `cgc` CLI on the host if you want live graph-backed context instead of the standard fallback path.
 - The verified smoke for that path is `npm run gg -- --json workflow run prompt-improver "inspect agent routing" --context-source prefer`, which should emit `contextSource: codegraphcontext` or `contextSource: hybrid`.
 - Portable installs now include `.agent/agents/`, `.agent/registry/persona-registry.json`, and `.agent/registry/persona-compounds.json` so new projects inherit deterministic persona routing on day one.
+
+## Related Documentation
+
+- `docs/setup/multi-model-control-plane-usage.md` — Multi-model control plane usage guide
+- `docs/setup/multi-model-control-plane-runbook.md` — Operational runbook
+- `docs/implementation-notes/multi-model-control-plane-implementation.md` — Implementation details
+- `docs/runtime-profiles.md` — Runtime-specific configuration
+- `docs/agentic-harness.md` — Core harness documentation

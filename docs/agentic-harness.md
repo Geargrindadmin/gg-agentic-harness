@@ -309,6 +309,15 @@ AGENT_MODE=$(cat .agent-mode 2>/dev/null || echo "antigravity")
 
 ---
 
+## Related Documentation
+
+- `docs/setup/multi-model-control-plane-usage.md` — Usage guide for operators
+- `docs/setup/multi-model-control-plane-runbook.md` — Operational procedures
+- `docs/implementation-notes/multi-model-control-plane-implementation.md` — Technical implementation
+- `docs/runtime-profiles.md` — Runtime-specific configuration
+
+---
+
 ## Session Lifecycle Checklist
 
 ### Start

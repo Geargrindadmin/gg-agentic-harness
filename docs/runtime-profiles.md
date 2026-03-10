@@ -187,3 +187,10 @@ Run `node scripts/harness-lint.mjs` to verify:
 - runtime docs reference the same MCP registry and artifact contracts shipped by the harness.
 
 Run `npm run harness:runtime:status` to confirm the current machine/runtime adapter status for the repo you are working in.
+
+## Related Documentation
+
+- `docs/setup/multi-model-control-plane-usage.md` — Comprehensive usage guide
+- `docs/setup/multi-model-control-plane-runbook.md` — Operational runbook
+- `docs/implementation-notes/multi-model-control-plane-implementation.md` — Implementation details
+- `docs/agentic-harness.md` — Core harness documentation

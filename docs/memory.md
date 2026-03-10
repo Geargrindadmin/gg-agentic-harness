@@ -47,3 +47,5 @@ If all memory paths are unavailable, proceed and record `status=skipped` with re
 
 - `docs/runtime-profiles.md`
 - `docs/agentic-harness.md`
+- `docs/setup/multi-model-control-plane-usage.md` — Usage guide for the multi-model control plane
+- `docs/implementation-notes/multi-model-control-plane-implementation.md` — Implementation details
